@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "complex": "c",
+        "cmath": "c"
+    },
+    "makefile.configureOnOpen": true
+}

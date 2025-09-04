@@ -57,6 +57,8 @@ typedef struct {
   anti_hermitmat accumulate[4]; /* accumulation matrix for smearing */
   su3_matrix fieldstrength[6]; /* components of fmunu */
 #endif
+double ch_dens; /* topological charge density */
+dcomplex ch_dens_corr; /* space averaged topological charge density correlators */
 } site;
 
 /* End definition of site structure */

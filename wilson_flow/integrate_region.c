@@ -13,6 +13,10 @@ static Real this_stoptime = 0.;
 static su3_matrix **stap = NULL, **link0 = NULL;
 static anti_hermitmat ***ahK = NULL, **accu = NULL;
 
+
+
+
+
 #if ( GF_INTEGRATOR==INTEGRATOR_ADAPT_LUSCHER \
   || GF_INTEGRATOR==INTEGRATOR_ADAPT_CF3 \
   || GF_INTEGRATOR==INTEGRATOR_ADAPT_BS ) 
@@ -29,9 +33,19 @@ void print_adapt( char *TAG, double flowtime, double stepsize, double dist, doub
   #endif
 }
 
+
+
+
+
+
+
+
+
 /* Highest level function that integrates the flow, called from control.c */
 void
 run_gradient_flow( int region_flag ) {
+
+
 
   /* RK integration variables */
   int i;
@@ -43,6 +57,16 @@ run_gradient_flow( int region_flag ) {
   double old_value=0, new_value=0;
   double der_value=0;
   char RTAG[3][12];
+
+  /* (nt/2 * s2_max) array of doubles for correlators */
+  int s2_max = 3 * (nx/2) * (nx/2);
+  double** corrs = malloc((nt/2) * sizeof(double*));
+  corrs[0] = malloc((nt/2) * s2_max * sizeof(double));
+  for (int i = 1; i < (nt/2); i++) {
+    corrs[i] = corrs[0] + i * s2_max;
+  }
+
+
 
 
 #ifdef SPHALERON
@@ -78,33 +102,34 @@ run_gradient_flow( int region_flag ) {
         this_exp_order = exp_order_bulk;
         this_stepsize = stepsize_bulk;
         this_stoptime = stoptime_bulk;
-      #if ( GF_INTEGRATOR==INTEGRATOR_ADAPT_LUSCHER \
-        || GF_INTEGRATOR==INTEGRATOR_ADAPT_CF3 \
-        || GF_INTEGRATOR==INTEGRATOR_ADAPT_BS ) 
-        this_local_tol = local_tol_bulk;
-      #endif
+        #if ( GF_INTEGRATOR==INTEGRATOR_ADAPT_LUSCHER \
+          || GF_INTEGRATOR==INTEGRATOR_ADAPT_CF3 \
+          || GF_INTEGRATOR==INTEGRATOR_ADAPT_BS ) 
+          this_local_tol = local_tol_bulk;
+        #endif
         sprintf(RTAG[0],"GFLOW_BULK:");
         sprintf(RTAG[1],"ADAPT_BULK:");
         sprintf(RTAG[2],"      ");
         break;
-    case BOUNDARY:
-        this_exp_order = exp_order_bdry;
-        this_stepsize = stepsize_bdry;
-        this_stoptime = stoptime_bdry;
-      #if ( GF_INTEGRATOR==INTEGRATOR_ADAPT_LUSCHER \
-        || GF_INTEGRATOR==INTEGRATOR_ADAPT_CF3 \
-        || GF_INTEGRATOR==INTEGRATOR_ADAPT_BS ) 
-        this_local_tol = local_tol_bdry;
-      #endif
-        sprintf(RTAG[0],"GFLOW_BDRY:");
-        sprintf(RTAG[1],"ADAPT_BDRY:");
-        sprintf(RTAG[2],"      ");
-        break;
+      case BOUNDARY:
+          this_exp_order = exp_order_bdry;
+          this_stepsize = stepsize_bdry;
+          this_stoptime = stoptime_bdry;
+        #if ( GF_INTEGRATOR==INTEGRATOR_ADAPT_LUSCHER \
+          || GF_INTEGRATOR==INTEGRATOR_ADAPT_CF3 \
+          || GF_INTEGRATOR==INTEGRATOR_ADAPT_BS ) 
+          this_local_tol = local_tol_bdry;
+        #endif
+          sprintf(RTAG[0],"GFLOW_BDRY:");
+          sprintf(RTAG[1],"ADAPT_BDRY:");
+          sprintf(RTAG[2],"      ");
+          break;
       default:
         node0_printf("Invalid region specification: %d\n",region);
         fflush(stdout); terminate(1);
     }
   #endif
+
   if ( this_stepsize == 0. || this_stepsize * this_stoptime < 0. || this_exp_order == 0 ) {
     node0_printf("Invalid stepsize/stoptime/exp_order combination: %g %g %d\n",
       this_stepsize,this_stoptime,this_exp_order);
@@ -124,11 +149,15 @@ run_gradient_flow( int region_flag ) {
 #endif
   fflush(stdout);
 
+  
+
+
   /* Calculate and print initial flow output */
   if ( region == FULLVOL ) {
     fmunu_fmunu_full( Et_C, Es_C, charge );
     gauge_action_w_s_full( Et_WS, Es_WS );
   }
+
   #ifdef SPHALERON
     if ( region == BULK ) {
       fmunu_fmunu_bulk( Et_C, Es_C, charge );
@@ -151,7 +180,11 @@ run_gradient_flow( int region_flag ) {
       #endif
     }
   #endif
+
   print_observables( RTAG[0], 0.0, Et_WS, Es_WS, Et_C, Es_C, charge );
+
+
+
 
 #if GF_INTEGRATOR==INTEGRATOR_ADAPT_LUSCHER || \
   GF_INTEGRATOR==INTEGRATOR_ADAPT_CF3 || \
@@ -171,9 +204,12 @@ run_gradient_flow( int region_flag ) {
   // K[3] to K[0] after each step
   indK[0] = 0; indK[1] = 1; indK[2] = 2; indK[3] = 3;
 #endif
+
+
   is_final_step = 0;
   flowtime = 0;
   i = 0;
+
 
   #ifdef USE_FIELD
     stap = new_field( 4 );
@@ -194,6 +230,10 @@ run_gradient_flow( int region_flag ) {
     #endif
   #endif
 
+
+
+
+
   /* Loop over the flow time */
   while( this_stoptime==AUTO_STOPTIME || ( flowtime<this_stoptime && is_final_step==0 ) ) {
     /* Adjust last time step to fit exactly stoptime_bulk */
@@ -208,16 +248,25 @@ run_gradient_flow( int region_flag ) {
         update_last_flow_links( link_last_flow );
     #endif
 
+
+
+
+
+
     /* Perform one flow step (most of the computation is here) */
     flow_step();
     flowtime += this_stepsize;
     i++;
 
-    /* Calculate and print current flow output */
+
+
+
+    /* Calculate current flow output */
     if ( region == FULLVOL ) {
       fmunu_fmunu_full( Et_C, Es_C, charge );
       gauge_action_w_s_full( Et_WS, Es_WS );
     }
+
     #ifdef SPHALERON
       if ( region == BULK ) {
         fmunu_fmunu_bulk( Et_C, Es_C, charge );
@@ -234,9 +283,36 @@ run_gradient_flow( int region_flag ) {
         #endif
       }
     #endif
+
+    /* Print current flow output */
     #if ( REPORT != NO_REPORT )
       print_observables( RTAG[0], flowtime, Et_WS, Es_WS, Et_C, Es_C, charge );
     #endif
+
+
+
+
+    /* Computation of correlators */
+    tcd_corrs_by_fourier();
+    corr_by_spatial_distance(corrs);
+
+    /* Print correlators */
+    node0_printf("q-corrs");
+    for (int t_corr = 0; t_corr < nt/2; t_corr++) {
+      for (int s2_corr = 0; s2_corr < s2_max; s2_corr++) {
+        node0_printf(" %.16g", corrs[t_corr][s2_corr]);
+      }
+      if (t_corr != nt/2 - 1) {
+        node0_printf(",");
+      }
+    }
+    node0_printf("\n\n");
+
+
+
+
+
+
 
 #if GF_INTEGRATOR==INTEGRATOR_ADAPT_LUSCHER || \
   GF_INTEGRATOR==INTEGRATOR_ADAPT_CF3 || \
@@ -269,9 +345,13 @@ run_gradient_flow( int region_flag ) {
 
   } /* end: flowtime loop */
 
+
+
+
   #if REPORT == NO_REPORT
     print_observables( RTAG[0], flowtime, Et_WS, Es_WS, Et_C, Es_C, charge );
   #endif
+
   #ifdef SPHALERON
     if ( region == BOUNDARY ) {
       print_observables( "ACCUM_BDRY", flowtime, Et_WS, Es_WS, Et_C, Es_C, charge );
@@ -281,26 +361,49 @@ run_gradient_flow( int region_flag ) {
       destroy_field( &link_last_flow );
     }
   #endif
+
   /* Save and print the number of steps */
   total_steps = i;
   node0_printf("Number of steps = %i\n", total_steps);
+
 #if GF_INTEGRATOR==INTEGRATOR_ADAPT_LUSCHER || \
   GF_INTEGRATOR==INTEGRATOR_ADAPT_CF3 || \
   GF_INTEGRATOR==INTEGRATOR_ADAPT_BS
   node0_printf("Number of rejected steps = %i\n", steps_rejected);
 #endif
+
   fflush(stdout);
+
   #ifdef USE_FIELD
     if (ahK != NULL )
       destroy_anti_hermitian_twodim_field( &ahK );
     destroy_anti_hermitian_field( &accu );
     destroy_field( &stap );
   #endif
+
+
+  free(corrs[0]);
+  free(corrs);
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #if GF_INTEGRATOR==INTEGRATOR_EULER || \
     GF_INTEGRATOR==INTEGRATOR_LUSCHER || GF_INTEGRATOR==INTEGRATOR_CK \
  || GF_INTEGRATOR==INTEGRATOR_BBB || GF_INTEGRATOR==INTEGRATOR_CF3
+
 /* A single step for a 2N-storage Runge-Kutta scheme
  * where the right hand side of the flow equation is evaluated
  * and the fields are updated

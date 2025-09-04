@@ -32,7 +32,9 @@ MY_OBJECTS= \
   control.o \
   gauge_info.o \
   flow_helpers.o \
-  setup.o  
+  save_topo.o \
+  setup.o \
+  top_fourier.o
 
 NOFIELD_OBJECTS= \
 	field_strength.o \
@@ -66,7 +68,8 @@ G_OBJECTS = \
   remap_stdio_from_args.o \
   show_generic_opts.o \
   reunitarize2.o \
-  ranstuff.o
+  ranstuff.o \
+  restrict_fourier.o
 
 ifeq ($(strip ${HAVEQIO}),true)
   G_OBJECTS += file_types_milc_usqcd.o io_scidac.o io_scidac_types.o

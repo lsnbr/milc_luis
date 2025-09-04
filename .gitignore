@@ -12,3 +12,6 @@ localmake
 *.test-diff
 *.test-tmp
 *.test-out
+
+zeugs/gauge_configs/
+zeugs/thermalized_configs/

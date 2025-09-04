@@ -65,8 +65,14 @@ if(this_node==0)printf("Fat Polyakov loop parameter %f\n",ALPHA_FUZZ);
                 plp_fuzzy = ploop_staple((Real)ALPHA_FUZZ);
 #endif
 
+                // // save lattice
+                // char fname[256];
+                // sprintf(fname, "gauge_configs/pg_%04d.lat", meascount);
+                // save_lattice(SAVE_ASCII, fname, NULL);
+
+
                 ++meascount;
-                if(this_node==0)printf("GMES %e %e %e %e %e\n",
+                if(this_node==0)printf("GMES %e %e %e %e %e\n\n",
                     (double)plp.real,(double)plp.imag,99.9,dssplaq,dstplaq);
                 /* Re(Polyakov) Im(Poyakov) cg_iters ss_plaq st_plaq */
 

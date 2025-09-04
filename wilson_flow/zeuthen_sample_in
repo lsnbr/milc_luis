@@ -1,0 +1,12 @@
+prompt 0
+nx 16
+ny 16
+nz 16
+nt 4
+
+reload_ascii ../zeugs/gauge_configs/pg_0009.lat
+zeuthen
+exp_order 8
+stepsize 0.045
+stoptime 0.72
+save_ascii ../zeugs/gauge_configs/pg_0009_ft.lat

@@ -158,6 +158,11 @@ fmunu_fmunu_bulk( double *time, double *space, double *charge ) {
   #undef NFS
 }
 
+
+
+
+
+
 /* Computes the field strength components and topological charge,
  * in the active bulk including the two boundaries */
 void
@@ -199,7 +204,7 @@ fmunu_fmunu_full( double *time, double *space, double *charge ) {
       fti = &(fstrength[FS_ZT+6][i]);
       time[1] -= real_trace_nn(fti, fti);
       charge[2] -= real_trace_nn(fs, fti);
-      charge[3] -= real_trace_nn(fsi, fti);
+      s->ch_dens = -real_trace_nn(fsi, fti);
     #endif
 
     fs = &(fstrength[FS_XZ][i]);
@@ -219,7 +224,7 @@ fmunu_fmunu_full( double *time, double *space, double *charge ) {
       time[1] -= real_trace_nn(fti, fti);
       /* ANTICYCLIC! ReTr{ fs.dag * ft } */
       charge[2] -= realtrace_su3(fs, fti);
-      charge[3] -= realtrace_su3(fsi, fti);
+      s->ch_dens -= realtrace_su3(fsi, fti);
     #endif
 
     fs = &(fstrength[FS_YZ][i]);
@@ -236,7 +241,12 @@ fmunu_fmunu_full( double *time, double *space, double *charge ) {
       fti = &(fstrength[FS_XT+6][i]);
       time[1] -= real_trace_nn(fti, fti);
       charge[2] -= real_trace_nn(fs, fti);
-      charge[3] -= real_trace_nn(fsi, fti);
+      s->ch_dens -= real_trace_nn(fsi, fti);
+    #endif
+
+    #if NFS > 9
+      charge[3] += s->ch_dens;
+      s->ch_dens *= 0.0003957858736028819197; /* normalization of 1/(8^2 * 4 * PI^2) */
     #endif
 
   }
@@ -265,6 +275,10 @@ fmunu_fmunu_full( double *time, double *space, double *charge ) {
   destroy_field( &fstrength );
   #undef NFS
 }
+
+
+
+
 
 
 /* Compute loops, here only 3D spatial part,

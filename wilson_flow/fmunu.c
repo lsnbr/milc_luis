@@ -47,19 +47,22 @@ fmunu_fmunu( double *time, double *space, double *charge )
     ft = &(s->fieldstrength[FS_ZT]);
     *time -= real_trace_nn(ft, ft);
     *space -= real_trace_nn(fs, fs);
-    *charge -= real_trace_nn(fs, ft);
+    s->ch_dens = -real_trace_nn(fs, ft);
 
     fs = &(s->fieldstrength[FS_XZ]);
     ft = &(s->fieldstrength[FS_YT]);
     *time -= real_trace_nn(ft, ft);
     *space -= real_trace_nn(fs, fs);
-    *charge -= realtrace_su3(fs, ft); /* ReTr{ fs.dag * ft } */
+    s->ch_dens -= realtrace_su3(fs, ft); /* ReTr{ fs.dag * ft } */
 
     fs = &(s->fieldstrength[FS_YZ]);
     ft = &(s->fieldstrength[FS_XT]);
     *time -= real_trace_nn(ft, ft);
     *space -= real_trace_nn(fs, fs);
-    *charge -= real_trace_nn(fs, ft);
+    s->ch_dens -= real_trace_nn(fs, ft);
+
+    s->ch_dens *= 0.0003957858736028819197; /* normalization of 1/(8^2 * 4 * PI^2) */
+    *charge += s->ch_dens;
   }
 
   /* Sum over all nodes */
@@ -70,7 +73,7 @@ fmunu_fmunu( double *time, double *space, double *charge )
   /* Normalizations */
   *time /= (volume*64.0);
   *space /= (volume*64.0);
-  *charge *= 0.0003957858736028819197; /* normalization of 1/(8^2 * 4 * PI^2) */
+  // *charge *= 0.0003957858736028819197; /* normalization of 1/(8^2 * 4 * PI^2) */
 }
 
 

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 #include "defines.h"
 #include "../include/complex.h"
 #include "../include/su3.h"
@@ -84,6 +85,13 @@ void ahmat_copy( anti_hermitmat *a, anti_hermitmat *b );
 void commutator_ah( anti_hermitmat *a, anti_hermitmat *b, anti_hermitmat *c );
 void dexpinv( anti_hermitmat *u, anti_hermitmat *v, int q, anti_hermitmat *d );
 Real su3mat_distance( su3_matrix *a, su3_matrix *b );
+
+// save topological charge density to file
+void save_topo(char *filenam);
+
+// measurement stuff
+void tcd_corrs_by_fourier();
+void zero_mom_corrs(double *corrs_time);
 
 #ifdef DEBUG_FIELDS
 void repack_site( su3_matrix *a, MATRIX_TYPE *b );
