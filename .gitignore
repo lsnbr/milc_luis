@@ -15,3 +15,6 @@ localmake
 
 zeugs/gauge_configs/
 zeugs/thermalized_configs/
+
+pure_gauge/su3_ora
+pure_gauge/su3_hmc

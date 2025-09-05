@@ -44,6 +44,22 @@ def run_command(exe_path : Path, input : str, ncores : int) -> str:
 
 
 
+def gen_input_initial(ns : int, nt : int, iseed : int|None = None) -> str:
+    '''Generated initial part of input file with nx=ny=nz=ns.'''
+
+    return f'''
+           prompt 0
+           nx {ns}
+           ny {ns}
+           nz {ns}
+           nt {nt}
+           {f'iseed {iseed}' if iseed is not None else ''}
+           '''
+
+
+
+
+
 def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path) -> str:
     '''Do sweeps amount of heat bath sweeps.
     input_initial: prompt, nx, ny, nz, nt.'''
@@ -138,26 +154,18 @@ if __name__ == '__main__':
 
 
     # do warmups
-    if 0:
+    if 1:
 
         ns = 16
         nt = 8
         
-        input_initial = \
-            f'''
-            prompt 0
-            nx {ns}
-            ny {ns}
-            nz {ns}
-            nt {nt}
-            iseed 2314
-            '''
+        input_initial = gen_input_initial(ns, nt, iseed=2314)
 
         out = do_warmups(
-            sweeps        = 100,
+            sweeps        = 10,
             beta          = 6.237,
             input_initial = input_initial,
-            lat_out       = Path('thermalized_configs') / 'ns16_nt8_T1p3.lat'
+            lat_out       = Path('thermalized_configs') / 'ns16_nt8_T1p3_10hb.lat'
         )
 
         print(out)
@@ -189,7 +197,7 @@ if __name__ == '__main__':
 
 
 
-    if 1:
+    if 0:
 
         ns = 16
         nt = 8
