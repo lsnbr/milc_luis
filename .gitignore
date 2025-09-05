@@ -16,5 +16,5 @@ localmake
 zeugs/gauge_configs/
 zeugs/thermalized_configs/
 
-pure_gauge/su3_ora
-pure_gauge/su3_hmc
+pure_gauge/su3_*
+wilson_flow/region_flow_*
