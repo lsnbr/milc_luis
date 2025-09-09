@@ -44,7 +44,8 @@ void tcd_corrs_by_fourier() {
 
 
 
-/* - corrs_dist[nt/2][s^2_max] 
+
+/* - corrs_dist[nt/2][s^2_max+1] 
    - s^2_max is the maximal squared distance, s^2_max = 3 * (ns/2)^2
    - correlators are not normalized by d_s
 */
@@ -54,14 +55,14 @@ void corr_by_spatial_distance(double **corrs_dist) {
     site *s;
 
     int s2_max = 3 * (nx/2) * (nx/2);
+    int count = (nt / 2) * (s2_max + 1);
 
 
     for (int ii = 0; ii < nt/2; ii++) {
-        for (int jj = 0; jj < s2_max; jj++) {
+        for (int jj = 0; jj <= s2_max; jj++) {
             corrs_dist[ii][jj] = 0.0;
         }
     }
-
 
     FORALLSITES(i, s) {
         if (s->t >= nt/2) continue;
@@ -71,10 +72,12 @@ void corr_by_spatial_distance(double **corrs_dist) {
         int sz = s->z > nz/2 ? nz - s->z : s->z;
 
         int s2 = sx*sx + sy*sy + sz*sz;
-        if (s2 > s2_max) {node0_printf("bad distance, s2=%d, s2max=%d\n", s2, s2_max); break;}    /* should never happen */
+        if (s2 > s2_max) {printf("bad distance, s2=%d, s2max=%d\n", s2, s2_max); break;}    /* should never happen */
 
         corrs_dist[s->t][s2] += s->ch_dens_corr.real;
     }
+
+    g_vecdoublesum(corrs_dist[0], count);
 
 
 }

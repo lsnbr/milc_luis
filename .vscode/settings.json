@@ -1,7 +1,11 @@
 {
     "files.associations": {
         "complex": "c",
-        "cmath": "c"
+        "cmath": "c",
+        "wilson_flow_includes.h": "c",
+        "random": "c",
+        "limits": "c"
     },
-    "makefile.configureOnOpen": true
+    "makefile.configureOnOpen": true,
+    "C_Cpp.dimInactiveRegions": false
 }

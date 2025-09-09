@@ -58,12 +58,12 @@ run_gradient_flow( int region_flag ) {
   double der_value=0;
   char RTAG[3][12];
 
-  /* (nt/2 * s2_max) array of doubles for correlators */
+  /* (nt/2 * (s2_max+1)) array of doubles for correlators */
   int s2_max = 3 * (nx/2) * (nx/2);
   double** corrs = malloc((nt/2) * sizeof(double*));
-  corrs[0] = malloc((nt/2) * s2_max * sizeof(double));
-  for (int i = 1; i < (nt/2); i++) {
-    corrs[i] = corrs[0] + i * s2_max;
+  corrs[0] = malloc((nt/2) * (s2_max+1) * sizeof(double));
+  for (int ii = 1; ii < (nt/2); ii++) {
+    corrs[ii] = corrs[0] + ii * (s2_max+1);
   }
 
 
@@ -152,7 +152,8 @@ run_gradient_flow( int region_flag ) {
   
 
 
-  /* Calculate and print initial flow output */
+  /* Calculate and print initial flow output (same as in flow loop) */
+  node0_printf("\n");
   if ( region == FULLVOL ) {
     fmunu_fmunu_full( Et_C, Es_C, charge );
     gauge_action_w_s_full( Et_WS, Es_WS );
@@ -182,6 +183,23 @@ run_gradient_flow( int region_flag ) {
   #endif
 
   print_observables( RTAG[0], 0.0, Et_WS, Es_WS, Et_C, Es_C, charge );
+
+  /* Computation of correlators */
+  tcd_corrs_by_fourier();
+  corr_by_spatial_distance(corrs);
+
+  /* Print correlators */
+  node0_printf("q-corrs");
+  for (int t_corr = 0; t_corr < nt/2; t_corr++) {
+    for (int s2_corr = 0; s2_corr <= s2_max; s2_corr++) {
+      node0_printf(" %.16g", corrs[t_corr][s2_corr]);
+    }
+    if (t_corr != nt/2 - 1) {
+      node0_printf(",");
+    }
+  }
+  node0_printf("\n\n");
+
 
 
 
@@ -236,8 +254,9 @@ run_gradient_flow( int region_flag ) {
 
   /* Loop over the flow time */
   while( this_stoptime==AUTO_STOPTIME || ( flowtime<this_stoptime && is_final_step==0 ) ) {
-    /* Adjust last time step to fit exactly stoptime_bulk */
-    if( this_stepsize>this_stoptime-flowtime && this_stoptime!=AUTO_STOPTIME ) {
+    node0_printf("\n");
+    /* Adjust last time step to fit exactly stoptime_bulk (+1e-6 to prevent a tiny additional step at the end) */
+    if( this_stepsize+1e-6 > this_stoptime-flowtime && this_stoptime!=AUTO_STOPTIME ) {
       this_stepsize = this_stoptime-flowtime;
       is_final_step = 1;
     }
@@ -250,14 +269,10 @@ run_gradient_flow( int region_flag ) {
 
 
 
-
-
-
     /* Perform one flow step (most of the computation is here) */
     flow_step();
     flowtime += this_stepsize;
     i++;
-
 
 
 
@@ -291,7 +306,6 @@ run_gradient_flow( int region_flag ) {
 
 
 
-
     /* Computation of correlators */
     tcd_corrs_by_fourier();
     corr_by_spatial_distance(corrs);
@@ -299,7 +313,7 @@ run_gradient_flow( int region_flag ) {
     /* Print correlators */
     node0_printf("q-corrs");
     for (int t_corr = 0; t_corr < nt/2; t_corr++) {
-      for (int s2_corr = 0; s2_corr < s2_max; s2_corr++) {
+      for (int s2_corr = 0; s2_corr <= s2_max; s2_corr++) {
         node0_printf(" %.16g", corrs[t_corr][s2_corr]);
       }
       if (t_corr != nt/2 - 1) {
@@ -307,9 +321,6 @@ run_gradient_flow( int region_flag ) {
       }
     }
     node0_printf("\n\n");
-
-
-
 
 
 

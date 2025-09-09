@@ -87,8 +87,6 @@ def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path) 
 
 
 
-
-
 def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : str) -> str:
     '''Flows lat_initial to flow times (rkmk3).
     input_initial: prompt, nx, ny, nz, nt.'''
@@ -115,7 +113,6 @@ def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : 
         tf_current = tf
 
     return run_command(exe_path, input_initial, ncores)
-
 
 
 
@@ -154,25 +151,35 @@ if __name__ == '__main__':
 
 
     # do warmups
-    if 1:
+    if 0:
 
-        ns = 16
-        nt = 8
+        ns = 4
+        nt = 4
+
+        beta = (
+            6.237,  # nt = 8,  T/Tc = 1.3
+            6.531,  # nt = 12, T/Tc = 1.3
+            6.754,  # nt = 16, T/Tc = 1.3
+            6.623,  # nt = 16, T/Tc = 1.1
+            5.826,  # nt = 4,  T/Tc = 1.3
+        )[-1]
+
+        sweeps = 1000
         
         input_initial = gen_input_initial(ns, nt, iseed=2314)
 
         out = do_warmups(
-            sweeps        = 10,
-            beta          = 6.237,
+            sweeps        = sweeps,
+            beta          = beta,
             input_initial = input_initial,
-            lat_out       = Path('thermalized_configs') / 'ns16_nt8_T1p3_10hb.lat'
+            lat_out       = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_{sweeps}hb.lat'
         )
 
         print(out)
 
 
 
-    # do flow
+    # do flow with prescribed itermediate flowtimes
     if 0:
 
         ns = 16
@@ -197,25 +204,21 @@ if __name__ == '__main__':
 
 
 
-    if 0:
+    # do flow with prescibed stoptime and stepsize
+    if 1:
 
         ns = 16
-        nt = 8
+        nt = 16
 
-        input_initial = \
-            f'''
-            prompt 0
-            nx {ns}
-            ny {ns}
-            nz {ns}
-            nt {nt}
-            '''
+        input_initial = gen_input_initial(ns, nt)
         
         out = flow_rkmk3(
             stoptime      = 1,
             stepsize      = 0.1,
-            lat_initial   = Path('thermalized_configs') / 'ns16_nt8_T1p3.lat',
+            lat_initial   = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_5000hb.lat',
             input_initial = input_initial
         )
 
         print(out)
+
+        (Path('outputs') / 'flow_test.txt').write_text(out)

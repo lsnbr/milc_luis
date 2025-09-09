@@ -58,6 +58,7 @@ main( int argc, char **argv )
 
 
 
+
   /* Loop over configurations */
   while( readin(prompt) == 0 ) {
 
