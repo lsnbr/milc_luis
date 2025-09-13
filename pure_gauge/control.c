@@ -10,19 +10,25 @@
 #define CONTROL
 #include "pure_gauge_includes.h"
 
+
+
+
+
 int main(int argc, char *argv[])  {
+
+
 int meascount,todo;
 int prompt;
 double dssplaq,dstplaq;
 complex plp;
-double dtime;
+double dtime, dtime2;
 
 initialize_machine(&argc,&argv);
 
-  /* Remap standard I/O */
-  if(remap_stdio_from_args(argc, argv) == 1)terminate(1);
+    /* Remap standard I/O */
+    if (remap_stdio_from_args(argc, argv) == 1) terminate(1);
 
- g_sync();
+    g_sync();
     /* set up */
     prompt = setup();
 
@@ -30,50 +36,69 @@ initialize_machine(&argc,&argv);
     make_glueball_ops();
 #endif
 
+
+
+
     /* loop over input sets */
-    while( readin(prompt) == 0){
+    while ( readin(prompt) == 0) {
+
+        dtime2 = -dclock();
 
         /* perform warmup trajectories */
         dtime = -dclock();
  
 #ifdef FUZZ
-if(this_node==0)printf("Fat Polyakov loop parameter %f\n",ALPHA_FUZZ);
+        if (this_node==0) printf("Fat Polyakov loop parameter %f\n",ALPHA_FUZZ);
 #endif
 
-        for(todo=warms; todo > 0; --todo ){
+        for (todo=warms; todo > 0; --todo ) {
             update();
         }
-        if(this_node==0)printf("WARMUPS COMPLETED\n");
+        if (this_node==0) printf("WARMUPS COMPLETED\n");
+
+        dtime += dclock();
+        if (this_node==0) printf("Time for warmups = %e seconds\n\n", dtime);
+
+
+
 
         /* perform measuring trajectories, reunitarizing and measuring  */
         meascount=0;            /* number of measurements               */
         plp = cmplx(99.9,99.9);
-        for(todo=trajecs; todo > 0; --todo ){ 
+
+        for (todo=trajecs; todo > 0; --todo ) { 
 
             /* do the trajectories */
             update();
 
             /* measure every "propinterval" trajectories */
-            if((todo%propinterval) == 0){
-            
+            if ((todo%propinterval) == 0) {
+                dtime = -dclock();
+
                 /* call plaquette measuring process */
                 d_plaquette(&dssplaq,&dstplaq);
 
                 /* call the Polyakov loop measuring program */
                 plp = ploop();
+
+                dtime += dclock();
+                if (this_node==0) printf("Time for ploop and plaq measurements = %e seconds\n", dtime);
+
 #ifdef FUZZ
                 plp_fuzzy = ploop_staple((Real)ALPHA_FUZZ);
 #endif
 
-                // // save lattice
-                // char fname[256];
-                // sprintf(fname, "gauge_configs/pg_%04d.lat", meascount);
-                // save_lattice(SAVE_ASCII, fname, NULL);
 
+                // save lattice
+                char fname[256];
+                sprintf(fname, "gauge_configs/pg_%05d.lat", meascount);
+                save_lattice(SAVE_SERIAL, fname, NULL);
 
+                
                 ++meascount;
-                if(this_node==0)printf("GMES %e %e %e %e %e\n\n",
-                    (double)plp.real,(double)plp.imag,99.9,dssplaq,dstplaq);
+
+                if (this_node==0) printf("GMES %e %e %e %e %e\n\n",
+                    (double)plp.real, (double)plp.imag, 99.9, dssplaq, dstplaq);
                 /* Re(Polyakov) Im(Poyakov) cg_iters ss_plaq st_plaq */
 
 #ifdef FUZZ
@@ -85,37 +110,47 @@ if(this_node==0)printf("Fat Polyakov loop parameter %f\n",ALPHA_FUZZ);
 #endif
 
                 fflush(stdout);
-            }
+
+            }   /* end of measurement */
+
         }       /* end loop over trajectories */
+
+
+
 
 #ifdef ORA_ALGORITHM
        /* gaugefix if requested */
-       if( fixflag == COULOMB_GAUGE_FIX){
-	 gaugefix(TUP,(Real)1.8,600,(Real)GAUGE_FIX_TOL);
-           if(this_node==0)printf("FIXED TO COULOMB GAUGE\n");
-           fflush(stdout);
+       if ( fixflag == COULOMB_GAUGE_FIX) {
+	        gaugefix(TUP, (Real)1.8, 600, (Real)GAUGE_FIX_TOL);
+            if (this_node==0) printf("FIXED TO COULOMB GAUGE\n");
+            fflush(stdout);
        }
        else if( fixflag == LANDAU_GAUGE_FIX){
-	 gaugefix(8,(Real)1.8,600,(Real)GAUGE_FIX_TOL);
-           if(this_node==0)printf("FIXED TO LANDAU GAUGE\n");
-           fflush(stdout);
+	        gaugefix(8, (Real)1.8, 600, (Real)GAUGE_FIX_TOL);
+            if (this_node==0) printf("FIXED TO LANDAU GAUGE\n");
+            fflush(stdout);
        }
 #endif
 
 
-        if(this_node==0)printf("RUNNING COMPLETED\n");
+        if (this_node==0) printf("RUNNING COMPLETED\n");
 
-        dtime += dclock();
-        if(this_node==0){
-            printf("Time = %e seconds\n",dtime);
-        }
+        dtime2 += dclock();
+        if (this_node==0) printf("Time = %e seconds\n", dtime2);
+
         fflush(stdout);
-	dtime = -dclock();
+	    dtime2 = -dclock();
 
         /* save lattice if requested */
         if( saveflag != FORGET ){
-	  save_lattice( saveflag, savefile, stringLFN );
+	        save_lattice( saveflag, savefile, stringLFN );
         }
-    }
+    
+        
+    }   /* end of readin(prompt) loop */
+
+
+
+
     return 0;
 }

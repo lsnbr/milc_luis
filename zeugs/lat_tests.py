@@ -20,12 +20,14 @@ def f(ns):
 
 
 
-ns = 4
-print(f'box size {ns}x{ns}x{ns}')
+if __name__ == '__main__':
 
-print('s2_max =', s2_max(ns))
+    ns = 4
+    print(f'box size {ns}x{ns}x{ns}')
 
-n_d = f(ns)
-print('\n'.join(f'{d} {n}' for d, n in sorted(n_d.items(), key=lambda x:x[0])))
+    print('s2_max =', s2_max(ns))
 
-print('total sum =', sum(n_d.values()))
+    n_d = f(ns)
+    print('\n'.join(f'{d} {n}' for d, n in sorted(n_d.items(), key=lambda x:x[0])))
+
+    print('total sum =', sum(n_d.values()))

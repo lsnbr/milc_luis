@@ -1,44 +1,11 @@
-import subprocess
 from pathlib import Path
-import re
-import math
 import numpy as np
-
 from typing import List
+
+from various_goods import run_command_stream
 
 
 ncores = 4
-
-
-
-
-def run_command(exe_path : Path, input : str, ncores : int) -> str:
-    '''runs cmd with mpi, returning stdout'''
-
-    cmd = [
-        "mpirun",
-        "-np", str(ncores),
-        str(exe_path)
-    ]
-
-    proc = subprocess.run(
-        cmd,                        # the full command line as a list
-        input=input,                # send this string to the program's stdin
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        universal_newlines=True,    # Use this instead of 'text=True' for Python 3.6
-        check=False                 # we'll handle non-zero exit codes ourselves
-    )
-
-    out = proc.stdout
-
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"Command {cmd!r} failed with exit code {proc.returncode}.\n"
-            f"Output was:\n{out}"
-        )
-
-    return out
 
 
 
@@ -47,14 +14,15 @@ def run_command(exe_path : Path, input : str, ncores : int) -> str:
 def gen_input_initial(ns : int, nt : int, iseed : int|None = None) -> str:
     '''Generated initial part of input file with nx=ny=nz=ns.'''
 
-    return f'''
-           prompt 0
-           nx {ns}
-           ny {ns}
-           nz {ns}
-           nt {nt}
-           {f'iseed {iseed}' if iseed is not None else ''}
-           '''
+    return \
+        f'''
+        prompt 0
+        nx {ns}
+        ny {ns}
+        nz {ns}
+        nt {nt}
+        {f'iseed {iseed}' if iseed is not None else ''}
+        '''
 
 
 
@@ -63,10 +31,6 @@ def gen_input_initial(ns : int, nt : int, iseed : int|None = None) -> str:
 def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path) -> str:
     '''Do sweeps amount of heat bath sweeps.
     input_initial: prompt, nx, ny, nz, nt.'''
-
-    exe_path = Path("../pure_gauge/su3_ora")
-    if not exe_path.exists():
-        raise FileNotFoundError(f"Could not find ORA executable at {exe_path}")
     
     input_initial += \
         f'''
@@ -81,7 +45,29 @@ def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path) 
         save_serial {lat_out}
         '''
     
-    return run_command(exe_path, input_initial, ncores)
+    return run_command_stream(Path("../pure_gauge/su3_ora"), input_initial, ncores)
+
+
+
+
+
+def gen_configs_ora(configs : int, skip : int, beta : float, lat_initial : Path, input_initial : str) -> str:
+    '''Takes a start config from which it generates new ones, saving every measurement interval.'''
+
+    input_gen = \
+        f'''
+        warms 0
+        trajecs {configs}
+        traj_between_meas {skip}
+        beta {beta}
+        steps_per_trajectory 4
+        qhb_steps 1
+        reload_serial {lat_initial}
+        no_gauge_fix
+        forget
+        '''
+    
+    return run_command_stream(Path("../pure_gauge/su3_ora"), input_initial + input_gen, ncores)
 
 
 
@@ -90,10 +76,6 @@ def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path) 
 def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : str) -> str:
     '''Flows lat_initial to flow times (rkmk3).
     input_initial: prompt, nx, ny, nz, nt.'''
-
-    exe_path = Path("../wilson_flow/region_flow_rkmk3")
-    if not exe_path.exists():
-        raise FileNotFoundError(f"Could not find gradient flow executable at {exe_path}")
 
     if sorted(flow_times) != list(flow_times):
         raise Exception('List flow_times not sorted in ascending order.')
@@ -112,7 +94,7 @@ def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : 
             '''
         tf_current = tf
 
-    return run_command(exe_path, input_initial, ncores)
+    return run_command_stream(Path("../wilson_flow/region_flow_rkmk3"), input_initial, ncores)
 
 
 
@@ -121,10 +103,6 @@ def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : 
 def flow_rkmk3(stoptime : float, stepsize : float, lat_initial : Path, input_initial : str) -> str:
     '''Flows lat_initial with given stoptime and stepsize using zeuthen flow with rkmk3 integrator.
     input_initial: prompt, nx, ny, nz, nt.'''
-
-    exe_path = Path("../wilson_flow/region_flow_rkmk3")
-    if not exe_path.exists():
-        raise FileNotFoundError(f"Could not find gradient flow executable at {exe_path}")
     
     input_flow = \
         f'''
@@ -136,8 +114,20 @@ def flow_rkmk3(stoptime : float, stepsize : float, lat_initial : Path, input_ini
         forget
         '''
     
-    return run_command(exe_path, input_initial + input_flow, ncores)
+    return run_command_stream(Path("../wilson_flow/region_flow_rkmk3"), input_initial + input_flow, ncores)
 
+
+
+
+
+def flow_params(n_steps : int, Nt : int, r_max : float = 0.25) -> tuple[float, float]:
+    '''Given amnount of steps ([0,1,2] has two steps), number of time divisions and maximal flow radius,
+    computes (stoptime, stepsize) parameters in lattice units.'''
+
+    stoptime = (r_max * Nt)**2 / 8
+    stepsize = stoptime / n_steps
+
+    return stoptime, stepsize
 
 
 
@@ -149,24 +139,30 @@ def flow_rkmk3(stoptime : float, stepsize : float, lat_initial : Path, input_ini
 
 if __name__ == '__main__':
 
+    ncores = 4
 
-    # do warmups
-    if 0:
+    ns = 16
+    nt = 16
 
-        ns = 4
-        nt = 4
-
-        beta = (
+    beta = (
             6.237,  # nt = 8,  T/Tc = 1.3
             6.531,  # nt = 12, T/Tc = 1.3
             6.754,  # nt = 16, T/Tc = 1.3
             6.623,  # nt = 16, T/Tc = 1.1
             5.826,  # nt = 4,  T/Tc = 1.3
-        )[-1]
+        )[2]
+    
+    iseed = 2314
+    print(flow_params(10, nt))
+
+
+
+    # do warmups
+    if 0:
 
         sweeps = 1000
         
-        input_initial = gen_input_initial(ns, nt, iseed=2314)
+        input_initial = gen_input_initial(ns, nt, iseed=iseed)
 
         out = do_warmups(
             sweeps        = sweeps,
@@ -176,6 +172,23 @@ if __name__ == '__main__':
         )
 
         print(out)
+
+
+
+    # generate pg configs
+    if 0:
+
+        input_initial = gen_input_initial(ns, nt, iseed=iseed)
+    
+        out = gen_configs_ora(
+            configs       = 100,
+            skip          = 10,
+            beta          = beta,
+            lat_initial   = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_5000hb.lat',
+            input_initial = input_initial
+        )
+
+        (Path('outputs') / 'ora_test.txt').write_text(out)
 
 
 
@@ -205,7 +218,7 @@ if __name__ == '__main__':
 
 
     # do flow with prescibed stoptime and stepsize
-    if 1:
+    if 0:
 
         ns = 16
         nt = 16

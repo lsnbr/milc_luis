@@ -54,7 +54,7 @@ void corr_by_spatial_distance(double **corrs_dist) {
     int i;
     site *s;
 
-    int s2_max = 3 * (nx/2) * (nx/2);
+    int s2_max = (nx/2)*(nx/2) + (ny/2)*(ny/2) + (nz/2)*(nz/2);
     int count = (nt / 2) * (s2_max + 1);
 
 

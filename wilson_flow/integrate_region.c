@@ -59,7 +59,7 @@ run_gradient_flow( int region_flag ) {
   char RTAG[3][12];
 
   /* (nt/2 * (s2_max+1)) array of doubles for correlators */
-  int s2_max = 3 * (nx/2) * (nx/2);
+  int s2_max = (nx/2)*(nx/2) + (ny/2)*(ny/2) + (nz/2)*(nz/2);
   double** corrs = malloc((nt/2) * sizeof(double*));
   corrs[0] = malloc((nt/2) * (s2_max+1) * sizeof(double));
   for (int ii = 1; ii < (nt/2); ii++) {

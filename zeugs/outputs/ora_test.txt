@@ -1,0 +1,146 @@
+com_qmp: set thread-safety level to 0
+Pure gauge SU3
+MIMD version 7
+Machine = QMP (portable), with 4 nodes
+Overrelaxed/quasi-heat bath algorithm
+start: Thu Sep 11 20:29:46 2025
+
+type 0 for no prompts, 1 for prompts, or 2 for proofreading
+nx 16
+ny 16
+nz 16
+nt 16
+iseed 2314
+LAYOUT = Hypercubes, options = hyper_prime,
+QMP with automatic hyper_prime layout
+ON EACH NODE (RANK) 8 x 8 x 16 x 16
+Mallocing 22.0 MBytes per node for lattice
+
+
+warms 0
+trajecs 100
+traj_between_meas 10
+beta 6.754
+steps_per_trajectory 4
+qhb_steps 1
+reload_serial thermalized_configs/ns16_nt16_T1p3_5000hb.lat
+NOT fixing the gauge
+forget 
+Restored binary gauge configuration serially from file thermalized_configs/ns16_nt16_T1p3_5000hb.lat
+Time stamp Sat Sep  6 15:38:10 2025
+Checksums 4d7151ed f20cf140 OK
+Time to reload gauge configuration = 5.566692e-02
+CHECK PLAQ: 1.9716110817255830e+00 1.9726129338891656e+00
+CHECK NERSC LINKTR: -6.1224786177995882e-05 CKSUM: 64df06d3
+Reunitarized for double precision. Max deviation 7.79e-08 changed to 5.55e-16
+Time to check unitarity = 5.236864e-03
+WARMUPS COMPLETED
+Time for warmups = 9.536743e-07 seconds
+
+Time for ploop and plaq measurements = 2.468896e-02 seconds
+Saved gauge configuration serially to binary file gauge_configs/pg_00000.lat
+Time stamp Thu Sep 11 20:29:46 2025
+Checksums ea96e65 425dc418
+Wrote info file gauge_configs/pg_00000.lat.info
+Time to save = 4.745603e-02
+CHECK PLAQ: 1.9697261186976640e+00 1.9680896047577221e+00
+CHECK NERSC LINKTR: -2.6733608657511205e-05 CKSUM: 3ed02847
+GMES -1.088798e-02 2.173649e-02 9.990000e+01 1.969726e+00 1.968090e+00
+
+Time for ploop and plaq measurements = 2.869606e-02 seconds
+Saved gauge configuration serially to binary file gauge_configs/pg_00001.lat
+Time stamp Thu Sep 11 20:29:49 2025
+Checksums a99a554f 340873bd
+Wrote info file gauge_configs/pg_00001.lat.info
+Time to save = 4.439092e-02
+CHECK PLAQ: 1.9682383818880520e+00 1.9679749030043725e+00
+CHECK NERSC LINKTR: -3.4299084361717096e-04 CKSUM: 404cd2c1
+GMES -1.429047e-02 4.059048e-02 9.990000e+01 1.968238e+00 1.967975e+00
+
+Time for ploop and plaq measurements = 2.291584e-02 seconds
+Saved gauge configuration serially to binary file gauge_configs/pg_00002.lat
+Time stamp Thu Sep 11 20:29:52 2025
+Checksums 9e81999a 2239cf52
+Wrote info file gauge_configs/pg_00002.lat.info
+Time to save = 5.055118e-02
+CHECK PLAQ: 1.9698169606916796e+00 1.9691612809133179e+00
+CHECK NERSC LINKTR: -4.6922574235818017e-04 CKSUM: 2bbaa157
+GMES -1.063180e-02 7.235052e-03 9.990000e+01 1.969817e+00 1.969161e+00
+
+Time for ploop and plaq measurements = 1.919389e-02 seconds
+Saved gauge configuration serially to binary file gauge_configs/pg_00003.lat
+Time stamp Thu Sep 11 20:29:54 2025
+Checksums 62758e20 5787bec0
+Wrote info file gauge_configs/pg_00003.lat.info
+Time to save = 4.350090e-02
+CHECK PLAQ: 1.9664896329241932e+00 1.9680628280073280e+00
+CHECK NERSC LINKTR: 1.1987024696778448e-04 CKSUM: f2dd896
+GMES -1.384429e-02 2.618449e-02 9.990000e+01 1.966490e+00 1.968063e+00
+
+Time for ploop and plaq measurements = 2.164316e-02 seconds
+Saved gauge configuration serially to binary file gauge_configs/pg_00004.lat
+Time stamp Thu Sep 11 20:29:57 2025
+Checksums 60869ddb 3283ce3b
+Wrote info file gauge_configs/pg_00004.lat.info
+Time to save = 4.631400e-02
+CHECK PLAQ: 1.9688567126912366e+00 1.9671630042366910e+00
+CHECK NERSC LINKTR: 2.9097171390216005e-04 CKSUM: bbe04837
+GMES -2.091958e-02 1.499524e-02 9.990000e+01 1.968857e+00 1.967163e+00
+
+Time for ploop and plaq measurements = 2.086687e-02 seconds
+Saved gauge configuration serially to binary file gauge_configs/pg_00005.lat
+Time stamp Thu Sep 11 20:30:00 2025
+Checksums 5988a048 8490c312
+Wrote info file gauge_configs/pg_00005.lat.info
+Time to save = 4.410696e-02
+CHECK PLAQ: 1.9690163456880985e+00 1.9675503470581610e+00
+CHECK NERSC LINKTR: 4.8258312634577165e-04 CKSUM: badff906
+GMES -3.517983e-03 9.822201e-03 9.990000e+01 1.969016e+00 1.967550e+00
+
+Time for ploop and plaq measurements = 2.167201e-02 seconds
+Saved gauge configuration serially to binary file gauge_configs/pg_00006.lat
+Time stamp Thu Sep 11 20:30:02 2025
+Checksums f49bf46d d73148ea
+Wrote info file gauge_configs/pg_00006.lat.info
+Time to save = 4.717708e-02
+CHECK PLAQ: 1.9702556848919339e+00 1.9681432937234533e+00
+CHECK NERSC LINKTR: -6.5614526003407751e-04 CKSUM: af99c4bd
+GMES -2.354700e-02 -1.050287e-02 9.990000e+01 1.970256e+00 1.968143e+00
+
+Time for ploop and plaq measurements = 2.041698e-02 seconds
+Saved gauge configuration serially to binary file gauge_configs/pg_00007.lat
+Time stamp Thu Sep 11 20:30:05 2025
+Checksums 4cc50aa8 81768e89
+Wrote info file gauge_configs/pg_00007.lat.info
+Time to save = 4.787111e-02
+CHECK PLAQ: 1.9684405403321215e+00 1.9690868678724287e+00
+CHECK NERSC LINKTR: 4.4553723914194911e-04 CKSUM: 312b0e1
+GMES -1.197701e-02 2.792611e-02 9.990000e+01 1.968441e+00 1.969087e+00
+
+Time for ploop and plaq measurements = 2.063489e-02 seconds
+Saved gauge configuration serially to binary file gauge_configs/pg_00008.lat
+Time stamp Thu Sep 11 20:30:07 2025
+Checksums 8e25f72e 4d5ce5a7
+Wrote info file gauge_configs/pg_00008.lat.info
+Time to save = 4.940319e-02
+CHECK PLAQ: 1.9684588324752852e+00 1.9695276004137103e+00
+CHECK NERSC LINKTR: 2.0664888935308332e-04 CKSUM: 68616107
+GMES 8.194126e-03 -1.559022e-03 9.990000e+01 1.968459e+00 1.969528e+00
+
+Time for ploop and plaq measurements = 2.048898e-02 seconds
+Saved gauge configuration serially to binary file gauge_configs/pg_00009.lat
+Time stamp Thu Sep 11 20:30:09 2025
+Checksums 56441a49 fed9dfb6
+Wrote info file gauge_configs/pg_00009.lat.info
+Time to save = 4.346895e-02
+CHECK PLAQ: 1.9671912710741573e+00 1.9676621571245470e+00
+CHECK NERSC LINKTR: -5.7433181661289578e-05 CKSUM: 90ff29c5
+GMES 4.986106e-05 -8.643077e-03 9.990000e+01 1.967191e+00 1.967662e+00
+
+RUNNING COMPLETED
+Time = 2.587307e+01 seconds
+
+
+get_i(0): EOF on input.
+exit: Thu Sep 11 20:30:12 2025
+
