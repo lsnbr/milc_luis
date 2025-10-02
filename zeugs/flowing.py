@@ -5,7 +5,7 @@ from typing import List
 from various_goods import run_command_stream
 
 
-ncores = 4
+ncores = 8
 
 
 
@@ -139,7 +139,6 @@ def flow_params(n_steps : int, Nt : int, r_max : float = 0.25) -> tuple[float, f
 
 if __name__ == '__main__':
 
-    ncores = 4
 
     ns = 16
     nt = 16
@@ -150,10 +149,12 @@ if __name__ == '__main__':
             6.754,  # nt = 16, T/Tc = 1.3
             6.623,  # nt = 16, T/Tc = 1.1
             5.826,  # nt = 4,  T/Tc = 1.3
+            6.868,  # nt = 16, T/Tc = 1.5
+            6.640,  # nt = 12, T/Tc = 1.5
+            6.337,  # nt = 8,  T/Tc = 1.5
         )[2]
     
     iseed = 2314
-    print(flow_params(10, nt))
 
 
 
@@ -181,10 +182,10 @@ if __name__ == '__main__':
         input_initial = gen_input_initial(ns, nt, iseed=iseed)
     
         out = gen_configs_ora(
-            configs       = 100,
-            skip          = 10,
+            configs       = 10000,
+            skip          = 100,
             beta          = beta,
-            lat_initial   = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_5000hb.lat',
+            lat_initial   = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_1000hb.lat',
             input_initial = input_initial
         )
 
@@ -220,18 +221,40 @@ if __name__ == '__main__':
     # do flow with prescibed stoptime and stepsize
     if 0:
 
-        ns = 16
-        nt = 16
-
         input_initial = gen_input_initial(ns, nt)
         
         out = flow_rkmk3(
             stoptime      = 1,
             stepsize      = 0.1,
-            lat_initial   = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_5000hb.lat',
+            lat_initial   = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_1000hb.lat',
             input_initial = input_initial
         )
 
         print(out)
 
         (Path('outputs') / 'flow_test.txt').write_text(out)
+
+
+
+    # flow for ensemble
+    if 1:
+
+        input_initial = gen_input_initial(ns, nt)
+
+        stoptime, stepsize = flow_params(10, nt, r_max=0.15)
+
+        for i_config in range(100):
+            print( '#################################################')
+            print(f'###############  config {i_config:05}  ##################')
+            print( '#################################################')
+
+            out = flow_rkmk3(
+                stoptime      = stoptime,
+                stepsize      = stepsize,
+                lat_initial   = Path('gauge_configs') / f'pg_{i_config:05}.lat',
+                input_initial = input_initial
+            )
+
+            (Path('outputs') / f'flow_out_{i_config:05}.txt').write_text(out)
+
+

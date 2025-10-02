@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 import re
 from pathlib import Path
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 
@@ -30,8 +32,8 @@ class Measurements:
 
 
 
-def parse_flow_output(output : str) -> ...:
-    '''pasing output of wilson_flow program'''
+def parse_flow_output(output : str) -> list[Measurements]:
+    '''parsing output of wilson_flow program'''
 
     flow_measurements = []
 
@@ -50,6 +52,12 @@ def parse_flow_output(output : str) -> ...:
 
 
 
+def get_correlators(t, tf):
+    ...
+
+
+
+
 
 
 
@@ -61,12 +69,47 @@ def parse_flow_output(output : str) -> ...:
 if __name__ == '__main__':
 
 
-    with open(Path('outputs') / 'flow_test.txt', 'r', encoding='utf-8') as f:
-        flow_output = f.read()
 
-    flow_meas = parse_flow_output(flow_output)
+    # some test
+    if 0:
 
-    print(len(flow_meas[2].q_corrs[0]))
+        with open(Path('outputs') / 'flow_test.txt', 'r', encoding='utf-8') as f:
+            flow_output = f.read()
+
+        flow_meas = parse_flow_output(flow_output)
+
+        print(len(flow_meas[2].q_corrs[0]))
+    
+
+
+
+    # ensemble flow
+    if 1:
+
+        from statana import search_uncorr
+
+        data : list[list[Measurements]] = []
+
+        for i in range(100):
+            with open(Path('outputs') / f'flow_out_{i:05}.txt', 'r', encoding='utf-8') as f:
+                flow_output = f.read()
+            data.append(parse_flow_output(flow_output))
+
+        print()
+
+
+        # iq_ftmax = [ d[-1].charge for d in data ]
+        # plt.scatter(range(100), iq_ftmax)
+        # plt.ylim(-1.5, 1.5)
+        # plt.xlabel('config')
+        # plt.ylabel('icharge')
+        # plt.show()
+
+
+        vals = np.array([ d[0].charge for d in data ])
+        # plt.scatter(range(len(vals)), plaq_t_vals)
+        # plt.show()
+        search_uncorr(vals)
 
     
 

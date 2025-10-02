@@ -40,8 +40,8 @@ def find_beta(Nt : int, T_Tc : float, b_min : float = 4, b_max : float = 10) -> 
 
 
 
-Nt = 4
-T_Tc = 1.3
+Nt = 8
+T_Tc = 1.5
 
 beta = find_beta(Nt, T_Tc)
 print(beta)

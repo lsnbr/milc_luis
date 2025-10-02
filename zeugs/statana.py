@@ -26,12 +26,13 @@ def jackknife_replicas(data : np.ndarray) -> np.ndarray:
 
 
 
-def stat_error(j_replicas : np.ndarray, avg : float) -> float:
-    '''calculates the statistical errors from the jackknife replicas and the average value'''
+def stat_error(data : np.ndarray, bin_size : int) -> float:
+    '''calculates the statistical errors with jackknife replica method for given bin size'''
 
-    n = j_replicas.size
+    binned_data = bin_data(data, bin_size)
+    n = binned_data.size
     return np.sqrt(
-        ((j_replicas - avg)**2).sum() * (n-1) / n
+        ((jackknife_replicas(binned_data) - data.mean())**2).sum() * (n-1) / n
     )
 
 
@@ -41,15 +42,9 @@ def search_uncorr(data : np.ndarray) -> None:
     '''plots statistical error over bin size, thus the plateau signals where the data becomes uncorrelated'''
 
     bin_sizes = list(range(1, data.size // 10 + 1))
-    errors = []
-    
-    avg = data.mean()
-    for b in bin_sizes:
-        binned = bin_data(data, b)
-        j_replicas = jackknife_replicas(binned)
-        errors.append(stat_error(j_replicas, avg))
+    errors = [stat_error(data, b) for b in bin_sizes]
 
-    plt.scatter(bin_sizes, errors)
+    plt.plot(bin_sizes, errors, marker='o')
     plt.xlabel('Bin Size')
     plt.ylabel('Error')
     plt.show()
