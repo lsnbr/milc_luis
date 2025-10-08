@@ -1,4 +1,7 @@
 import numpy as np
+
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 
@@ -38,16 +41,17 @@ def stat_error(data : np.ndarray, bin_size : int) -> float:
 
 
 
-def search_uncorr(data : np.ndarray) -> None:
+def search_uncorr(data : np.ndarray, max_bin_size : int = -1) -> None:
     '''plots statistical error over bin size, thus the plateau signals where the data becomes uncorrelated'''
 
-    bin_sizes = list(range(1, data.size // 10 + 1))
+    if max_bin_size == -1: max_bin_size = data.size // 10
+    bin_sizes = list(range(1, max_bin_size + 1))
     errors = [stat_error(data, b) for b in bin_sizes]
 
     plt.plot(bin_sizes, errors, marker='o')
     plt.xlabel('Bin Size')
     plt.ylabel('Error')
-    plt.show()
+    plt.savefig('plot_error.png')
 
 
 
