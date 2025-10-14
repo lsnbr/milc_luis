@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import re
 from pathlib import Path
+from itertools import product
 import numpy as np
 
 import matplotlib
@@ -59,7 +60,49 @@ def parse_flow_output(output : str) -> FlowMeasurements:
 
 
 
-def get_correlators(ensemble : list[FlowMeasurements], t : int, tf : float, bin_size : int = 1) -> list[tuple[float, float]]:
+
+
+def radial_multiplicities(ns : int) -> list[int]:
+    '''result[s^2] is number of cells in a ns^3 lattice with distance s^2.'''
+
+    s2_max = 3 * (ns//2)**2
+    result = [0 for _ in range(s2_max+1)]
+
+    for x,y,z in product(range(ns), repeat=3):
+        x,y,z = (min(a, ns-a) for a in (x,y,z))
+        s2 = x**2 + y**2 + z**2
+        result[s2] += 1
+
+    return result
+
+
+
+
+def make_distance_corr_arrays(radial_corrs : list, normalize : bool) -> tuple[list, list]:
+    '''Takes a list where the index corresponds to s^2.
+    Removes all unreachable s^2 and returns [s] and [G(s)] ([G(s) / ds] if normalize is true).'''
+
+    s2_max = len(radial_corrs) - 1
+    ns = round(2 * (s2_max/3)**.5)
+
+    ds_list = radial_multiplicities(ns)
+    s_list = []
+    G_list = []
+
+    for s2, ds in enumerate(ds_list):
+        if ds == 0: continue
+        s_list.append(s2**.5)
+        G_list.append(radial_corrs[s2] / (ds if normalize else 1))
+            
+    return s_list, G_list
+
+
+
+
+def get_correlators(ensemble : list[FlowMeasurements], t : int, tf : float) -> tuple[list, list, list]:
+    '''For a fixed pair (t, tf), extract the data series G(t,s) for each configuration.
+    Then for each data point, compute its mean and standard deviation.
+    Returns [s values], [G(t,s) values], [G(t,s) errors].'''
     
     if len(ensemble) == 0:
         raise Exception('Empty ensemble :(')
@@ -71,13 +114,17 @@ def get_correlators(ensemble : list[FlowMeasurements], t : int, tf : float, bin_
     i_tf = min( range(len(ensemble[0])),
                 key=lambda i: abs(ensemble[0][i].flow_time - tf) )
 
+    # fill data_all_s2
     for flow_meas in ensemble:
-        for i, v in enumerate(flow_meas[i_tf].q_corrs[t]):
-            data_all_s2[i].append(v)
+        for s2, v in enumerate(flow_meas[i_tf].q_corrs[t]):
+            data_all_s2[s2].append(v)
 
-    return [ (data.mean(), stat_error(data, bin_size))
-             for data in map(np.array, data_all_s2) ]
-            
+    # divide by radial multiplicity factors and remove unreachable s^2
+    s_list, data_all_s = make_distance_corr_arrays(list(map(np.array, data_all_s2)), normalize=True)
+
+    return s_list, \
+           [data.mean() for data in data_all_s], \
+           [np.std(data) for data in data_all_s]
 
         
 
@@ -132,13 +179,26 @@ if __name__ == '__main__':
 
         print(', '.join(f'{meas.flow_time:.2f}' for meas in data[0]))
 
-        correlators = get_correlators(data, t=1, tf=0.36)
+        t=4
+        tf=0.43
+        s_vals, corr_vals, corr_errors = get_correlators(data, t=t, tf=tf)
+
+        s2_max = round(s_vals[-1]**2)
+        ns = round(2 * (s2_max/3)**.5)
+        ds = radial_multiplicities(ns)
+        print(f'{s2_max = }, {ns = },\n{ds = }\n')
         
-        plt.plot( [s2**.5 for s2 in range(len(correlators))] ,
-                  [val for val, err in correlators],
-                  marker='o' )
+        # print(f'corrs = {[v for v,e in correlators]}\n')
+
+        plt.errorbar( s_vals ,
+                      corr_vals,
+                      yerr=corr_errors,
+                      elinewidth=1,
+                      marker='o',
+                      markersize=3 )
         plt.xlabel('spatial distance')
         plt.ylabel('corr')
+        plt.title(f'tau={t}, tf={tf}')
         plt.savefig('plot_corr.png')
 
 

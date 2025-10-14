@@ -978,15 +978,15 @@ make_improved_temporal_fieldstrength_full ( su3_matrix **link_s,
      * integer after blocking, i.e. if there are different numbers of active sites on different 
      * nodes. Thus, the problem occurs only for certain combinations of layouts and node 
      * geometries. Thus, we do two simple gathers in sequence as a viable workaround. */
-#ifndef USE_GG
+  #ifndef USE_GG
     /* first part of diagonal gather lower left clover from diagonally across the square */
     tag[3] = start_gather_field( clov[P11], sizeof(su3_matrix), 
                                   diro[0], EVENANDODD, gen_pt[3] );
-#else
+  #else
     /* general gather lower left clover from diagonally across the square */
     tag[P11] = start_general_gather_field( clov[P11], sizeof(su3_matrix), 
                                            disp, EVENANDODD, gen_pt[P11] );
-#endif
+  #endif
     /* gather upper left clover from proper position */
     tag[P10] = start_gather_field( clov[P10], sizeof(su3_matrix), 
                                    diro[0], EVENANDODD, gen_pt[P10] );
@@ -995,7 +995,7 @@ make_improved_temporal_fieldstrength_full ( su3_matrix **link_s,
     tag[P01] = start_gather_field( clov[P01], sizeof(su3_matrix), 
                                    diro[1], EVENANDODD, gen_pt[P01] );
 
-#ifndef USE_GG
+  #ifndef USE_GG
     /* wait, copy, cleanup for first part of diagonal gather lower left clover from diagonally across the square */
     wait_gather(tag[3]);
     FORALLSITES(i,s)
@@ -1011,9 +1011,9 @@ make_improved_temporal_fieldstrength_full ( su3_matrix **link_s,
 
     /* wait, copy, cleanup for second part of diagonal gather lower left clover from diagonally across the square */
     wait_gather(tag[P11]);
-#else
+  #else
     wait_general_gather(tag[P11]);
-#endif
+  #endif
 
     wait_gather(tag[P10]);
     wait_gather(tag[P01]);
@@ -1027,12 +1027,12 @@ make_improved_temporal_fieldstrength_full ( su3_matrix **link_s,
       add_su3_matrix( &(fstrength[icomp][i]), (su3_matrix *)(gen_pt[P01][i]), &(fstrength[icomp][i]) );
     }
 
-#ifndef USE_GG
+  #ifndef USE_GG
     /* cleanup for second part of diagonal gather lower left clover from diagonally across the square */
     cleanup_gather(tag[P11]);
-#else
+  #else
     cleanup_general_gather(tag[P11]);
-#endif
+  #endif
 
     cleanup_gather(tag[P10]);
     cleanup_gather(tag[P01]);
