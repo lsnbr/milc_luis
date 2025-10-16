@@ -379,10 +379,10 @@ endif
 #----------------------------------------------------------------------
 # 12. FFTW3 Options
 
-WANTFFTW ?= false
+WANTFFTW ?= true
 
 ifeq ($(strip ${WANTFFTW}),true)
-  FFTW ?= ${FFTW_ROOT}
+  FFTW ?= ../../fftw
 
   FFTW_HEADERS = ${FFTW}/include
   INCFFTW = -I${FFTW_HEADERS}

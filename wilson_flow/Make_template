@@ -69,7 +69,8 @@ G_OBJECTS = \
   show_generic_opts.o \
   reunitarize2.o \
   ranstuff.o \
-  restrict_fourier.o
+  # restrict_fourier.o  # if milc intern fourier
+  remap_fftw_fourier.o  # for fftw fourier
 
 ifeq ($(strip ${HAVEQIO}),true)
   G_OBJECTS += file_types_milc_usqcd.o io_scidac.o io_scidac_types.o
