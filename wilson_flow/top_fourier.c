@@ -84,3 +84,14 @@ void corr_by_spatial_distance(double **corrs_dist) {
 
 
 
+
+
+
+void somecorrtests() {
+
+    ;
+
+}
+
+
+
