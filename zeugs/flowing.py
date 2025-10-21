@@ -219,25 +219,23 @@ if __name__ == '__main__':
 
 
     # do flow with prescibed stoptime and stepsize
-    if 0:
+    if 1:
 
         input_initial = gen_input_initial(ns, nt)
         
         out = flow_rkmk3(
-            stoptime      = 1,
+            stoptime      = 0,
             stepsize      = 0.1,
             lat_initial   = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_1000hb.lat',
             input_initial = input_initial
         )
-
-        print(out)
 
         (Path('outputs') / 'flow_test.txt').write_text(out)
 
 
 
     # flow for ensemble
-    if 1:
+    if 0:
 
         input_initial = gen_input_initial(ns, nt)
 

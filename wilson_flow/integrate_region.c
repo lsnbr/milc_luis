@@ -204,6 +204,15 @@ run_gradient_flow( int region_flag ) {
 
 
 
+  // node0_printf("\n############### some basic tests##############\n\n");
+  // somecorrtests(corrs);
+  // node0_printf("\n############### end of basic tests##############\n\n\n");
+
+
+
+
+
+
 #if GF_INTEGRATOR==INTEGRATOR_ADAPT_LUSCHER || \
   GF_INTEGRATOR==INTEGRATOR_ADAPT_CF3 || \
   GF_INTEGRATOR==INTEGRATOR_ADAPT_BS

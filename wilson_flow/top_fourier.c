@@ -30,7 +30,8 @@ void tcd_corrs_by_fourier() {
 
     // Compute |q(k)|^2 for each site->ch_dens_corr
     FORALLSITES(i,s) {
-        s->ch_dens_corr.real = s->ch_dens_corr.real * s->ch_dens_corr.real + s->ch_dens_corr.imag * s->ch_dens_corr.imag;
+        // i dont know why  / V*V  is necessary here... :(
+        s->ch_dens_corr.real = (s->ch_dens_corr.real * s->ch_dens_corr.real + s->ch_dens_corr.imag * s->ch_dens_corr.imag) / (volume*volume);
         s->ch_dens_corr.imag = 0;
     }
     g_sync();
@@ -87,9 +88,182 @@ void corr_by_spatial_distance(double **corrs_dist) {
 
 
 
-void somecorrtests() {
 
-    ;
+
+void somecorrtests(double **corrs_dist) {
+
+    int i;
+    site *s;
+
+    // build d_r array (for each radial distance r^2, the number of sites with that distance)
+    int s2_max = (nx/2)*(nx/2) + (ny/2)*(ny/2) + (nz/2)*(nz/2);
+    int *dr_array = calloc(s2_max+1, sizeof(int));
+    for(int x=0; x<nx; x++) for(int y=0; y<ny; y++) for(int z=0; z<nz; z++) {
+        int sx = x > nx/2 ? nx - x : x;
+        int sy = y > ny/2 ? ny - y : y;
+        int sz = z > nz/2 ? nz - z : z;
+        dr_array[sx*sx + sy*sy + sz*sz] += 1;
+    }
+
+
+
+    /* ############################################### */
+    /* ####### Test 0: fourier normalization ######### */
+    /* ############################################### */
+
+    FORALLSITES(i,s) {
+        s->ch_dens_corr.real = 1;
+        s->ch_dens_corr.imag = 0;
+    }
+    g_sync();
+
+    int key[4];
+    int slice[4];
+    key[XUP] = 1;
+    key[YUP] = 1;
+    key[ZUP] = 1;
+    key[TUP] = 1;
+    setup_restrict_fourier(key, slice);
+    restrict_fourier_site(F_OFFSET(ch_dens_corr), sizeof(dcomplex), FORWARDS);
+
+    g_sync();
+    setup_restrict_fourier(key, slice);
+    restrict_fourier_site(F_OFFSET(ch_dens_corr), sizeof(dcomplex), BACKWARDS);
+
+    // test for volume factor (fourier forward then back gives original function times volume)
+    FORALLSITES(i,s) {
+        if (fabs(s->ch_dens_corr.imag) > 1e-8)
+            printf("expected Im=0, got Im=%.16g\n", s->ch_dens_corr.imag);
+        if (fabs(s->ch_dens_corr.real - volume) > 1e-8)
+            printf("expected Re=V=%d, got Re=%.16g\n", volume, s->ch_dens_corr.real);
+        fflush(stdout);
+    }
+
+
+
+    /* ############################################### */
+    /* ############ Test 1: single site ############## */
+    /* ############################################### */
+
+    FORALLSITES(i,s) {
+        s->ch_dens = 1.0540398474441086;   // sqrt of 1.111
+    }
+    tcd_corrs_by_fourier();
+    corr_by_spatial_distance(corrs_dist);
+
+    // test if real
+    FORALLSITES(i,s) {
+        if (fabs(s->ch_dens_corr.imag) > 1e-8) {
+            printf("imag dens-corr at (x,y,z,t)=(%d,%d,%d,%d) with Im(C)=%.16g\n", s->x, s->y, s->z, s->t, s->ch_dens_corr.imag);
+            fflush(stdout);
+        }
+    }
+
+    // test correlation values
+    FORALLSITES(i,s) {
+        double expected = 1.111;
+        double actual = s->ch_dens_corr.real;
+        if (fabs(actual - expected) > 1e-8) {
+            printf("site (x=%d,y=%d,z=%d,t=%d): expected: %.16g, actual: %.16g\n", s->x, s->y, s->z, s->t, expected, actual);
+            fflush(stdout);
+        }
+    }
+
+    // test C(t,r)
+    for (int t=0; t<nt/2; t++) {
+        for (int s2=0; s2<=s2_max; s2++) {
+            double expected = 1.111 * dr_array[s2];
+            double actual = corrs_dist[t][s2];
+            if (fabs(actual - expected) > 1e-8) {
+                node0_printf("t=%d, r^2=%d: expected: %.16g, actual: %.16g\n", t, s2, expected, actual);
+                fflush(stdout);
+            }
+        }
+    }
+
+
+
+    /* ############################################### */
+    /* ############ Test 2: single site ############## */
+    /* ############################################### */
+
+    int t0 = nt/4;
+    int x0 = nx/4;
+    int y0 = ny/2;
+    int z0 = nz/3;
+
+    FORALLSITES(i,s) {
+        if (s->x==x0 && s->y==y0 && s->z==z0 && s->t==t0) s->ch_dens = 1.0540398474441086;    // sqrt of 1.111
+        else                                              s->ch_dens = 0;
+    }
+    tcd_corrs_by_fourier();
+    corr_by_spatial_distance(corrs_dist);
+
+    // test correlators
+    FORALLSITES(i,s) {
+        double expected = (s->x==0 && s->y==0 && s->z==0 && s->t==0) ? 1.111 / volume : 0;
+        double actual = s->ch_dens_corr.real;
+        if (fabs(actual - expected) > 1e-8) {
+            printf("site (x=%d,y=%d,z=%d,t=%d): expected: %.16g, actual: %.16g\n", s->x, s->y, s->z, s->t, expected, actual);
+            fflush(stdout);
+        }
+    }
+
+    // test C(t,r)
+    for(int t=0; t<nt/2; t++) for(int s2=0; s2<=s2_max; s2++) {
+        double expected = (t==0 && s2==0) ? 1.111 / volume : 0;
+        double actual = corrs_dist[t][s2];
+        if (fabs(actual - expected) > 1e-8) {
+            node0_printf("t=%d, r^2=%d: expected: %.16g, actual: %.16g\n", t, s2, expected, actual);
+            fflush(stdout);
+        }
+    }
+
+
+
+    /* ############################################### */
+    /* ############## Test 3: two site ############### */
+    /* ############################################### */
+    
+    double qa = 1.0540398474441086;    // sqrt of 1.111
+    double qb = 0.3507135583350036;    // sqrt of 0.123
+
+    FORALLSITES(i,s) {
+        if      (s->x==x0   && s->y==y0 && s->z==z0 && s->t==t0) s->ch_dens = qa;
+        else if (s->x==x0+1 && s->y==y0 && s->z==z0 && s->t==t0) s->ch_dens = qb;
+        else                                                     s->ch_dens = 0;
+    }
+    tcd_corrs_by_fourier();
+    corr_by_spatial_distance(corrs_dist);
+
+    // test correlators
+    FORALLSITES(i,s) {
+        double expected;
+        if      (s->x==0    && s->y==0 && s->z==0 && s->t==0) expected = (qa*qa + qb*qb) / volume;
+        else if (s->x==1    && s->y==0 && s->z==0 && s->t==0) expected = qa*qb / volume;
+        else if (s->x==nx-1 && s->y==0 && s->z==0 && s->t==0) expected = qa*qb / volume;
+        else                                                  expected = 0;
+        double actual = s->ch_dens_corr.real;
+        if (fabs(actual - expected) > 1e-8) {
+            printf("site (x=%d,y=%d,z=%d,t=%d): expected: %.16g, actual: %.16g\n", s->x, s->y, s->z, s->t, expected, actual);
+            fflush(stdout);
+        }
+    }
+
+    // test C(t,r)
+    for(int t=0; t<nt/2; t++) for(int s2=0; s2<=s2_max; s2++) {
+        double expected;
+        if      (t==0 && s2==0) expected = (qa*qa + qb*qb) / volume;
+        else if (t==0 && s2==1) expected = 2 * qa*qb / volume;
+        else                    expected = 0;
+        double actual = corrs_dist[t][s2];
+        if (fabs(actual - expected) > 1e-8) {
+            node0_printf("t=%d, r^2=%d: expected: %.16g, actual: %.16g\n", t, s2, expected, actual);
+            fflush(stdout);
+        }
+    }
+
+
 
 }
 
