@@ -8,35 +8,38 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from statana import stat_error
-
 
 
 
 @dataclass(frozen=True)
 class Measurements:
+
+    rtime_q    : float  # time in seconds for q=FF* computation
+    rtime_fft  : float  # time in seconds for correlator computation
+    rtime_flow : float  # time in seconds for flowstep
     
-    flow_time : float
+    flow_time  : float
 
-    clover_t  : float
-    clover_s  : float
-    iclover_t : float
-    iclover_s : float
+    clover_t   : float
+    clover_s   : float
+    iclover_t  : float
+    iclover_s  : float
 
-    plaq_t    : float
-    plaq_s    : float
-    rect_t    : float
-    rect_s    : float
+    plaq_t     : float
+    plaq_s     : float
+    rect_t     : float
+    rect_s     : float
 
-    charge    : float
-    charge_is : float   # improved fs only for spatial part
-    charge_it : float   # improved fs only for temporal part
-    icharge   : float   # improved fs for everything
+    charge     : float
+    charge_is  : float  # improved fs only for spatial part
+    charge_it  : float  # improved fs only for temporal part
+    icharge    : float  # improved fs for everything
 
-    q_corrs   : list[list[float]]   # first index is time, second is spatial distance squared: q_corrs[t][s^2]
+    q_corrs    : list[list[float]]  # first index is time, second is spatial distance squared: q_corrs[t][s^2]
 
 
 FlowMeasurements = list[Measurements]
+
 
 
 
@@ -46,14 +49,19 @@ def parse_flow_output(output : str) -> FlowMeasurements:
     flow_measurements = []
 
     for section in re.split(r'\s*\n\n\s*', output):
-        if not section.startswith('GFLOW'): continue
+        if not section.startswith('Time to complete flowstep'): continue
+
+        lines = re.split(r'\n', section)
+
+        rtime_flow, rtime_q, rtime_fft = [ float(re.search(r'= (.+) seconds', lines[i])[1])
+                                           for i in (0,1,4) ]
         
-        obs, corrs = re.fullmatch(r'GFLOW: (.+)\nq-corrs (.+)', section).groups()
-        obs   = [ float(o) for o in obs.split() ]
-        corrs = [ [float(o) for o in slc.split()] 
-                  for slc in corrs.split(',')     ]
+        obs = map(float, lines[2].removeprefix('GFLOW: ').split())
+
+        corrs = [ [float(c) for c in tslice.split()]
+                  for tslice in lines[3].removeprefix('q-corrs ').split(',') ]
         
-        flow_measurements.append(Measurements(*obs, corrs))
+        flow_measurements.append(Measurements(rtime_q, rtime_fft, rtime_flow, *obs, corrs))
 
     return flow_measurements
 
@@ -140,7 +148,7 @@ if __name__ == '__main__':
 
 
 
-    # some test
+    # test runtimes of flow and measurements
     if 0:
 
         with open(Path('outputs') / 'flow_test.txt', 'r', encoding='utf-8') as f:
@@ -148,13 +156,109 @@ if __name__ == '__main__':
 
         flow_meas = parse_flow_output(flow_output)
 
-        print(len(flow_meas[2].q_corrs[0]))
-    
+        times_q = []
+        times_fft = []
+        times_flow = []
+
+        for meas in flow_meas:
+            times_q.append(meas.rtime_q)
+            times_fft.append(meas.rtime_fft)
+            times_flow.append(meas.rtime_flow)
+
+        for name, lst in zip('flow,q   ,fft '.split(','), (times_flow, times_q, times_fft)):
+            avg = sum(lst) / len(lst)
+            err = ( sum((t - avg)**2 for t in lst) / (len(lst) - 1) )**.5
+            print(f'time for {name} = {avg:.2f} ± {err:.2f} seconds')
+
+        print('\n', times_fft)
+
+
+
+
+    # test flow numerical errors as function of stepsize
+    if 1:
+
+        from flowing import flow_rkmk3, flow_params, gen_input_initial, radius_to_flowtime
+
+        nt = 16
+        ns = 64
+
+        rf_max = 0.125  # in units of beta
+
+        max_log_steps = 5
+        file = lambda ln: Path('outputs') / 'flow_err_test' / f'flow_ln={ln}.txt'
+
+
+        # compute flows for various stepsizes
+        for ln in range(max_log_steps + 1):
+            if file(ln).exists(): continue
+
+            stoptime, stepsize = flow_params(2**ln, nt, rf_max)
+            out = flow_rkmk3(
+                stoptime      = stoptime,
+                stepsize      = stepsize,
+                lat_initial   = Path('gauge_configs') / 'pg_00009.lat',
+                input_initial = gen_input_initial(ns, nt),
+                flow          = 'zeuthen'
+            )
+            file(ln).write_text(out)
+
+
+        # extract final flowtime measurement for each stepsize ln
+        finalmeas_for_ln = [parse_flow_output(file(ln).read_text())[-1] for ln in range(max_log_steps + 1)]
+        number_t_r2 = len(finalmeas_for_ln[0].q_corrs) * len(finalmeas_for_ln[0].q_corrs[0])
+
+        assert number_t_r2 == (nt//2) * (3*(ns//2)**2 + 1)
+        for ln in range(max_log_steps+1):
+            assert finalmeas_for_ln[ln].flow_time == radius_to_flowtime(rf_max, nt)
+
+        
+        # extract G(s) data series for each ln and each tau
+        corrsdist_ln_tau = []
+        for meas in finalmeas_for_ln:
+            corrsdist_ln_tau.append([ make_distance_corr_arrays(corrs_r2, False)[1]
+                                      for corrs_r2 in meas.q_corrs ])
+
+
+        # compute average difference of correlators between two neighbooring stepsizes
+        number_t_r = len(corrsdist_ln_tau[0]) * len(corrsdist_ln_tau[0][0])
+        print(len(corrsdist_ln_tau[0]), len(corrsdist_ln_tau[0][0]))
+        diff_for_ln    = []    # ln's elements is diff between ln and ln+1
+        differr_for_ln = []   
+
+        for ln in range(max_log_steps):
+            diff = 0
+            for tslice0, tslice1 in zip(corrsdist_ln_tau[ln], corrsdist_ln_tau[ln+1]):
+                for corr0, corr1 in zip(tslice0, tslice1):
+                    diff += abs(corr0 - corr1)
+            diff_for_ln.append(diff / number_t_r)
+
+            differr = 0
+            for tslice0, tslice1 in zip(corrsdist_ln_tau[ln], corrsdist_ln_tau[ln+1]):
+                for corr0, corr1 in zip(tslice0, tslice1):
+                    differr += (abs(corr0 - corr1) - diff_for_ln[ln])**2
+            differr_for_ln.append(np.sqrt(differr / (number_t_r-1)))
+
+
+        # plot the stuff
+        plt.errorbar(
+            x      = [2**ln for ln in range(max_log_steps)],
+            y      = diff_for_ln,
+            yerr   = differr_for_ln,
+            marker = 'o',
+        )
+        # plt.ylim(0, diff_for_ln[1] * 1.5)
+        plt.yscale('log')
+        plt.xlabel('Number n of flow-steps')
+        plt.ylabel('Average absolute error between n and 2n flow-steps')
+        plt.savefig('plot_flow_wilson_error.png')
+
+
 
 
 
     # ensemble flow
-    if 1:
+    if 0:
 
         from statana import search_uncorr
 

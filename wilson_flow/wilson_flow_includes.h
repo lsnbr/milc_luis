@@ -91,7 +91,12 @@ void save_topo(char *filenam);
 
 // measurement stuff
 void tcd_corrs_by_fourier();
+void corr_by_spatial_distance(double **corrs_dist);
 void zero_mom_corrs(double *corrs_time);
+
+// test stuff
+void somecorrtests(double **corrs_dist);
+
 
 #ifdef DEBUG_FIELDS
 void repack_site( su3_matrix *a, MATRIX_TYPE *b );

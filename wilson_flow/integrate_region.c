@@ -45,7 +45,8 @@ void print_adapt( char *TAG, double flowtime, double stepsize, double dist, doub
 void
 run_gradient_flow( int region_flag ) {
 
-
+  /* time keeping */
+  double dtime, dclock();
 
   /* RK integration variables */
   int i;
@@ -152,53 +153,53 @@ run_gradient_flow( int region_flag ) {
   
 
 
-  /* Calculate and print initial flow output (same as in flow loop) */
-  node0_printf("\n");
-  if ( region == FULLVOL ) {
-    fmunu_fmunu_full( Et_C, Es_C, charge );
-    gauge_action_w_s_full( Et_WS, Es_WS );
-  }
+  // /* Calculate and print initial flow output (same as in flow loop) */
+  // node0_printf("\n");
+  // if ( region == FULLVOL ) {
+  //   fmunu_fmunu_full( Et_C, Es_C, charge );
+  //   gauge_action_w_s_full( Et_WS, Es_WS );
+  // }
 
-  #ifdef SPHALERON
-    if ( region == BULK ) {
-      fmunu_fmunu_bulk( Et_C, Es_C, charge );
-      gauge_action_w_s_bulk( Et_WS, Es_WS );
-    }
-    if ( region == BOUNDARY ) {
-      // link_last_flow = new_last_flow_links();
-      // update_last_flow_links( link_last_flow );
-      link_last_flow = new_field( N_LAST_FLOW );
-      update_last_flow_links( link_last_flow );
-      fmunu_fmunu_bdry( link_last_flow, Et_C, Es_C, charge );
-      gauge_action_w_s_bdry( link_last_flow, Et_WS, Es_WS );
-      #ifdef HALF_LATTICE_TEST
-        fmunu_fmunu_lwr_bdry( link_last_flow, Et_C_lwr, Es_C_lwr, charge_lwr );
-        gauge_action_w_s_lwr_bdry( link_last_flow, &Et_WS_lwr, &Es_WS_lwr );
-        fmunu_fmunu_upr_bdry( link_last_flow, Et_C_upr, Es_C_upr, charge_upr );
-        gauge_action_w_s_upr_bdry( link_last_flow, &Et_WS_upr, &Es_WS_upr );
-        print_observables( "_LWRB", 0.0, Et_WS_lwr, Es_WS_lwr, Et_C_lwr, Es_C_lwr, charge_lwr );
-        print_observables( "_UPRB", 0.0, Et_WS_upr, Es_WS_upr, Et_C_upr, Es_C_upr, charge_upr );
-      #endif
-    }
-  #endif
+  // #ifdef SPHALERON
+  //   if ( region == BULK ) {
+  //     fmunu_fmunu_bulk( Et_C, Es_C, charge );
+  //     gauge_action_w_s_bulk( Et_WS, Es_WS );
+  //   }
+  //   if ( region == BOUNDARY ) {
+  //     // link_last_flow = new_last_flow_links();
+  //     // update_last_flow_links( link_last_flow );
+  //     link_last_flow = new_field( N_LAST_FLOW );
+  //     update_last_flow_links( link_last_flow );
+  //     fmunu_fmunu_bdry( link_last_flow, Et_C, Es_C, charge );
+  //     gauge_action_w_s_bdry( link_last_flow, Et_WS, Es_WS );
+  //     #ifdef HALF_LATTICE_TEST
+  //       fmunu_fmunu_lwr_bdry( link_last_flow, Et_C_lwr, Es_C_lwr, charge_lwr );
+  //       gauge_action_w_s_lwr_bdry( link_last_flow, &Et_WS_lwr, &Es_WS_lwr );
+  //       fmunu_fmunu_upr_bdry( link_last_flow, Et_C_upr, Es_C_upr, charge_upr );
+  //       gauge_action_w_s_upr_bdry( link_last_flow, &Et_WS_upr, &Es_WS_upr );
+  //       print_observables( "_LWRB", 0.0, Et_WS_lwr, Es_WS_lwr, Et_C_lwr, Es_C_lwr, charge_lwr );
+  //       print_observables( "_UPRB", 0.0, Et_WS_upr, Es_WS_upr, Et_C_upr, Es_C_upr, charge_upr );
+  //     #endif
+  //   }
+  // #endif
 
-  print_observables( RTAG[0], 0.0, Et_WS, Es_WS, Et_C, Es_C, charge );
+  // print_observables( RTAG[0], 0.0, Et_WS, Es_WS, Et_C, Es_C, charge );
 
-  /* Computation of correlators */
-  tcd_corrs_by_fourier();
-  corr_by_spatial_distance(corrs);
+  // /* Computation of correlators */
+  // tcd_corrs_by_fourier();
+  // corr_by_spatial_distance(corrs);
 
-  /* Print correlators */
-  node0_printf("q-corrs");
-  for (int t_corr = 0; t_corr < nt/2; t_corr++) {
-    for (int s2_corr = 0; s2_corr <= s2_max; s2_corr++) {
-      node0_printf(" %.16g", corrs[t_corr][s2_corr]);
-    }
-    if (t_corr != nt/2 - 1) {
-      node0_printf(",");
-    }
-  }
-  node0_printf("\n\n");
+  // /* Print correlators */
+  // node0_printf("q-corrs");
+  // for (int t_corr = 0; t_corr < nt/2; t_corr++) {
+  //   for (int s2_corr = 0; s2_corr <= s2_max; s2_corr++) {
+  //     node0_printf(" %.16g", corrs[t_corr][s2_corr]);
+  //   }
+  //   if (t_corr != nt/2 - 1) {
+  //     node0_printf(",");
+  //   }
+  // }
+  // node0_printf("\n\n");
 
 
 
@@ -278,12 +279,22 @@ run_gradient_flow( int region_flag ) {
 
 
 
+
+    dtime = -dclock();
+
     /* Perform one flow step (most of the computation is here) */
     flow_step();
     flowtime += this_stepsize;
     i++;
 
+    dtime += dclock();
+    node0_printf("Time to complete flowstep = %e seconds\n", dtime);
+    fflush(stdout);
+  
 
+
+
+    dtime = -dclock();
 
     /* Calculate current flow output */
     if ( region == FULLVOL ) {
@@ -308,12 +319,22 @@ run_gradient_flow( int region_flag ) {
       }
     #endif
 
+    dtime += dclock();
+    node0_printf("Time to compute F and q = %e seconds\n", dtime);
+    fflush(stdout);
+
+
+
+
     /* Print current flow output */
     #if ( REPORT != NO_REPORT )
       print_observables( RTAG[0], flowtime, Et_WS, Es_WS, Et_C, Es_C, charge );
     #endif
 
 
+
+
+    dtime = -dclock();
 
     /* Computation of correlators */
     tcd_corrs_by_fourier();
@@ -329,7 +350,12 @@ run_gradient_flow( int region_flag ) {
         node0_printf(",");
       }
     }
-    node0_printf("\n\n");
+    node0_printf("\n");
+
+    dtime += dclock();
+    node0_printf("Time to compute correlators = %e seconds\n\n", dtime);
+    fflush(stdout);
+
 
 
 

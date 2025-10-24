@@ -51,7 +51,7 @@ def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path) 
 
 
 
-def gen_configs_ora(configs : int, skip : int, beta : float, lat_initial : Path, input_initial : str) -> str:
+def gen_configs_ora(configs : int, skip : int, beta : float, lat_initial : Path|None, input_initial : str) -> str:
     '''Takes a start config from which it generates new ones, saving every measurement interval.'''
 
     input_gen = \
@@ -62,7 +62,7 @@ def gen_configs_ora(configs : int, skip : int, beta : float, lat_initial : Path,
         beta {beta}
         steps_per_trajectory 4
         qhb_steps 1
-        reload_serial {lat_initial}
+        {'fresh' if lat_initial is None else f'reload_serial {lat_initial}'}
         no_gauge_fix
         forget
         '''
@@ -100,14 +100,14 @@ def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : 
 
 
 
-def flow_rkmk3(stoptime : float, stepsize : float, lat_initial : Path, input_initial : str) -> str:
+def flow_rkmk3(stoptime : float, stepsize : float, lat_initial : Path, input_initial : str, flow : str = 'zeuthen') -> str:
     '''Flows lat_initial with given stoptime and stepsize using zeuthen flow with rkmk3 integrator.
     input_initial: prompt, nx, ny, nz, nt.'''
     
     input_flow = \
         f'''
         reload_serial {lat_initial}
-        zeuthen
+        {flow}
         exp_order 8
         stepsize {stepsize}
         stoptime {stoptime}
@@ -120,13 +120,22 @@ def flow_rkmk3(stoptime : float, stepsize : float, lat_initial : Path, input_ini
 
 
 
+def flowtime_to_radius(t : float, Nt : int) -> float:
+    '''Given flowtime in units of a^2, and number of time divisions, compute flow radius in units of beta.'''
+    return np.sqrt(8 * t) / Nt
+
+
+def radius_to_flowtime(r : float, Nt : int) -> float:
+    '''Given flow radius in units of beta, and number of time divisions, compute flowtime in units of a^2.'''
+    return (r * Nt)**2 / 8
+
+
 def flow_params(n_steps : int, Nt : int, r_max : float = 0.25) -> tuple[float, float]:
-    '''Given amnount of steps ([0,1,2] has two steps), number of time divisions and maximal flow radius,
+    '''Given amnount of steps ([0,1,2] has two steps), number of time divisions and maximal flow radius in units of beta,
     computes (stoptime, stepsize) parameters in lattice units.'''
 
-    stoptime = (r_max * Nt)**2 / 8
+    stoptime = radius_to_flowtime(r_max, Nt)
     stepsize = stoptime / n_steps
-
     return stoptime, stepsize
 
 
@@ -140,7 +149,7 @@ def flow_params(n_steps : int, Nt : int, r_max : float = 0.25) -> tuple[float, f
 if __name__ == '__main__':
 
 
-    ns = 16
+    ns = 64
     nt = 16
 
     beta = (
@@ -152,7 +161,7 @@ if __name__ == '__main__':
             6.868,  # nt = 16, T/Tc = 1.5
             6.640,  # nt = 12, T/Tc = 1.5
             6.337,  # nt = 8,  T/Tc = 1.5
-        )[2]
+        )[5]
     
     iseed = 2314
 
@@ -180,12 +189,13 @@ if __name__ == '__main__':
     if 0:
 
         input_initial = gen_input_initial(ns, nt, iseed=iseed)
+        lat_initial = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_1000hb.lat'
     
         out = gen_configs_ora(
-            configs       = 10000,
-            skip          = 100,
+            configs       = 10,
+            skip          = 1,
             beta          = beta,
-            lat_initial   = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_1000hb.lat',
+            lat_initial   = None,
             input_initial = input_initial
         )
 
@@ -222,12 +232,14 @@ if __name__ == '__main__':
     if 1:
 
         input_initial = gen_input_initial(ns, nt)
+        # lat_initial = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_1000hb.lat'
         
         out = flow_rkmk3(
-            stoptime      = 0,
-            stepsize      = 0.1,
-            lat_initial   = Path('thermalized_configs') / f'ns{ns}_nt{nt}_T1p3_1000hb.lat',
-            input_initial = input_initial
+            stoptime      = 0.5,
+            stepsize      = 0.5,
+            lat_initial   = Path('gauge_configs') / f'pg_00009.lat',
+            input_initial = input_initial,
+            flow          = 'wilson'
         )
 
         (Path('outputs') / 'flow_test.txt').write_text(out)
