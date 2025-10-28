@@ -66,13 +66,20 @@ initialize_machine(&argc,&argv);
         meascount=0;            /* number of measurements               */
         plp = cmplx(99.9,99.9);
 
-        for (todo=trajecs; todo > 0; --todo ) { 
+        dtime = -dclock();
+        for (int i_trajec=1; i_trajec <= trajecs; i_trajec++ ) { 
 
             /* do the trajectories */
             update();
 
+
             /* measure every "propinterval" trajectories */
-            if ((todo%propinterval) == 0) {
+            if ((i_trajec%propinterval) == 0) {
+
+                dtime += dclock();
+                if (this_node==0) printf("Time for %d updates = %e seconds\n", propinterval, dtime);
+
+
                 dtime = -dclock();
 
                 /* call plaquette measuring process */
@@ -84,6 +91,7 @@ initialize_machine(&argc,&argv);
                 dtime += dclock();
                 if (this_node==0) printf("Time for ploop and plaq measurements = %e seconds\n", dtime);
 
+
 #ifdef FUZZ
                 plp_fuzzy = ploop_staple((Real)ALPHA_FUZZ);
 #endif
@@ -94,7 +102,6 @@ initialize_machine(&argc,&argv);
                 sprintf(fname, "gauge_configs/pg_%05d.lat", meascount);
                 save_lattice(SAVE_SERIAL, fname, NULL);
 
-                
                 ++meascount;
 
                 if (this_node==0) printf("GMES %e %e %e %e %e\n\n",
@@ -110,6 +117,8 @@ initialize_machine(&argc,&argv);
 #endif
 
                 fflush(stdout);
+
+                dtime = -dclock();
 
             }   /* end of measurement */
 
