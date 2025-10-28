@@ -49,14 +49,14 @@ def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path, 
 
 
 
-def gen_configs_ora(configs : int, skip : int, beta : float, lat_initial : Path|None, input_initial : str, ncores : int, run_cmd : str = 'srun') -> str:
+def gen_configs_ora(configs : int, every_nth : int, beta : float, lat_initial : Path|None, input_initial : str, ncores : int, run_cmd : str = 'srun') -> str:
     '''Takes a start config from which it generates new ones, saving every measurement interval.'''
 
     input_gen = \
         f'''
         warms 0
         trajecs {configs}
-        traj_between_meas {skip}
+        traj_between_meas {every_nth}
         beta {beta}
         steps_per_trajectory 4
         qhb_steps 1
