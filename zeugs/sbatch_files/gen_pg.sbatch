@@ -7,17 +7,17 @@
 #
 #SBATCH -n 64                # Anzahl der Prozesse
 #SBATCH --mem-per-cpu=500    # Hauptspeicher in MByte pro MPI-Task
-#SBATCH -t 5                 # in Stunden, Minuten und Sekunden (-t 01:30:00), oder (-t 10) - nur Minuten
+#SBATCH -t 1-                # in Stunden, Minuten und Sekunden (-t 01:30:00), oder (-t 10) - nur Minuten
 
 # -------------------------------
 # Anschließend schreiben Sie Ihre eigenen Befehle zum Start der Berechnung, wie z.B.
 module purge
-module load openmpi python py-numpy
+module load openmpi python
 cd /home/ln29bamu/code/milc_luis/zeugs
 python3 do_gen_pg_ora.py
 EXITCODE=$?
 
 # Aufräum- und Kopierbefehle:
-...
+
 # JobScript mit dem Status des wiss. Programms beenden
 exit $EXITCODE

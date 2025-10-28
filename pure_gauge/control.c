@@ -99,7 +99,7 @@ initialize_machine(&argc,&argv);
 
                 // save lattice
                 char fname[256];
-                sprintf(fname, "gauge_configs/pg_%05d.lat", meascount);
+                sprintf(fname, "/work/scratch/ln29bamu/gauge_configs/pg_%08d.lat", i_trajec);
                 save_lattice(SAVE_SERIAL, fname, NULL);
 
                 ++meascount;
