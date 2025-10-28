@@ -40,10 +40,17 @@ def find_beta(Nt : int, T_Tc : float, b_min : float = 4, b_max : float = 10) -> 
 
 
 
-Nt = 8
-T_Tc = 1.5
 
-beta = find_beta(Nt, T_Tc)
-print(beta)
 
-print(summer_beta(beta) / Nt / 0.7457)
+
+
+
+if __name__ == '__main__':
+
+    Nt = 8
+    T_Tc = 1.5
+
+    beta = find_beta(Nt, T_Tc)
+    print(beta)
+
+    print(summer_beta(beta) / Nt / 0.7457)

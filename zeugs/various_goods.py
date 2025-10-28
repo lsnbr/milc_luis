@@ -42,15 +42,16 @@ def run_command(exe_path : Path, input : str, ncores : int) -> str:
 
 
 
-def run_command_stream(exe_path : Path, input : str|None, ncores : int) -> str:
+def run_command_stream(exe_path : Path, input : str|None, ncores : int, run_cmd : str = 'srun') -> str:
     '''Runs cmd with mpi, returning stdout. Additionally streams stdout while cmd is running.'''
 
     if not exe_path.exists():
         raise FileNotFoundError(f"Could not find executable at {exe_path}.")
 
     cmd = [
-        "mpirun",
-        "-np", str(ncores),
+        run_cmd,
+        '-n' if run_cmd == 'srun' else '-np',
+        str(ncores),
         str(exe_path)
     ]
 
