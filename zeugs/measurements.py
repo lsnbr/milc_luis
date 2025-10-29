@@ -88,7 +88,7 @@ def radial_multiplicities(ns : int) -> list[int]:
 def radial_separations(ns : int) -> list[float]:
     '''list of all reachable distances r on the lattice.'''
 
-    return [r2**.5 for r2 in radial_multiplicities(ns) if r2 != 0]
+    return [r2**.5 for r2, count in enumerate(radial_multiplicities(ns)) if count > 0]
 
 
 
