@@ -163,6 +163,13 @@ char savebuf[128];
 	    par_buf.savefile );
 	IF_OK status += ask_ildg_LFN(stdin,  prompt, par_buf.saveflag,
 				      par_buf.stringLFN );
+
+
+
+    /* find out where to save lattices at each measurement */
+    IF_OK status += get_s(stdin, prompt, "save_dir", par_buf.save_dir);
+
+
  
         /* send parameter structure */
 	if( status > 0)par_buf.stopflag=1; else par_buf.stopflag=0;
@@ -192,6 +199,8 @@ char savebuf[128];
     strcpy(startfile,par_buf.startfile);
     strcpy(savefile,par_buf.savefile);
     strcpy(stringLFN, par_buf.stringLFN);
+
+    strcpy(save_dir, par_buf.save_dir);
 
     /* Do whatever is needed to get lattice */
     if( startflag != CONTINUE )

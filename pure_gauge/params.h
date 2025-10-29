@@ -26,6 +26,8 @@ typedef struct {
 	Real epsilon;	/* time step */
 	char startfile[MAXFILENAME],savefile[MAXFILENAME];
 	char stringLFN[MAXFILENAME];  /** ILDG LFN if applicable ***/
+
+	char save_dir[MAXFILENAME];		/* folder where lattice config at each measurement is saved at */
 }  params;
 
 #endif /* _PARAMS_H */

@@ -87,6 +87,9 @@ EXTERN	Real beta[2]; // beta[0] - space, beta[1] - time
 #endif
 EXTERN	Real epsilon;
 EXTERN	char startfile[MAXFILENAME],savefile[MAXFILENAME];
+
+EXTERN  char save_dir[MAXFILENAME];
+
 EXTERN  double g_ssplaq, g_stplaq;
 EXTERN  double_complex linktrsum;
 EXTERN  u_int32type nersc_checksum;

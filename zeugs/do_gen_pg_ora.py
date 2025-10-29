@@ -28,6 +28,8 @@ save_every_nth_config   = 100
 
 lattice_initial = None
 
+save_dir = Path('/work/scratch/ln29bamu') / 'gauge_configs' / 'init'
+
 
 ncores = int(os.environ['SLURM_NTASKS'])
 
@@ -43,7 +45,10 @@ out = gen_configs_ora(
     every_nth     = save_every_nth_config,
 
     beta          = beta,
+
     lat_initial   = lattice_initial,
+    save_dir      = save_dir,
+
     input_initial = gen_input_initial(ns, nt, iseed),
 
     ncores        = ncores,

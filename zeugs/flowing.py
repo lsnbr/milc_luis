@@ -49,7 +49,8 @@ def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path, 
 
 
 
-def gen_configs_ora(configs : int, every_nth : int, beta : float, lat_initial : Path|None, input_initial : str, ncores : int, run_cmd : str = 'srun') -> str:
+def gen_configs_ora( configs : int, every_nth : int, beta : float, lat_initial : Path|None,
+                     save_dir : Path, input_initial : str, ncores : int, run_cmd : str = 'srun' ) -> str:
     '''Takes a start config from which it generates new ones, saving every measurement interval.'''
 
     input_gen = \
@@ -63,6 +64,7 @@ def gen_configs_ora(configs : int, every_nth : int, beta : float, lat_initial : 
         {'fresh' if lat_initial is None else f'reload_serial {lat_initial}'}
         no_gauge_fix
         forget
+        save_dir {save_dir}
         '''
     
     return run_command_stream(Path("../pure_gauge/su3_ora"), input_initial + input_gen, ncores, run_cmd)
