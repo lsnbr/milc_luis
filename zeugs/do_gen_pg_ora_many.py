@@ -18,8 +18,8 @@ T_Tc = 1.5      # just as info
 beta = 6.868    # depends on nt and T_Tc
 
 
-number_of_saved_configs = 2
-save_every_nth_config   = 10
+number_of_saved_configs = 70
+save_every_nth_config   = 100
 
 
 
