@@ -22,7 +22,7 @@ module load openmpi python
 cd /home/ln29bamu/code/milc_luis/zeugs
 
 # Directory for logs
-OUTDIR=/work/scratch/ln29bamu/outputs/branch1-14c_runs
+OUTDIR=/work/scratch/ln29bamu/outputs/branch1-15c_runs
 
 
 TOTAL_CORES=$SLURM_NTASKS
