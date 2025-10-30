@@ -7,10 +7,6 @@ from flowing import gen_input_initial, gen_configs_ora
 
 
 
-# location of lattice configurations is specified in pure_gauge/control.c
-# location of stdout, stderr is specified in sbatch script
-
-
 
 
 
@@ -20,18 +16,26 @@ nt = 16
 T_Tc = 1.5      # just as info
 beta = 6.868    # depends on nt and T_Tc
 
-iseed = 2314
-
 
 number_of_saved_configs = 200
 save_every_nth_config   = 100
 
-lattice_initial = None
 
-save_dir = Path('/work/scratch/ln29bamu') / 'gauge_configs' / 'init'
+
+
+# continue from last config of some branch
+
+branch = 0
+
+iseed = 2314 + 1_000_000*branch
+
+scratch_path    = Path('/work/scratch/ln29bamu')
+lattice_initial = scratch_path / 'gauge_configs' / f'branch{branch}' / 'pg_00006000.lat'
+save_dir        = scratch_path / 'gauge_configs' / f'branch{branch}c'
 
 
 ncores = int(os.environ['SLURM_NTASKS'])
+
 
 
 
