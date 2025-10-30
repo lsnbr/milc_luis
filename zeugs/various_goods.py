@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def run_command(exe_path : Path, input : str, ncores : int) -> str:
-    '''Runs cmd with mpi, returning stdout.'''
+    '''Runs cmd with mpi, returning stdout. BEFROE use incorprate changes done to stream version (regarding signature ex..)'''
 
     if not exe_path.exists():
         raise FileNotFoundError(f"Could not find executable at {exe_path}.")
@@ -42,21 +42,16 @@ def run_command(exe_path : Path, input : str, ncores : int) -> str:
 
 
 
-def run_command_stream(exe_path : Path, input : str|None, ncores : int, run_cmd : str = 'srun') -> str:
+def run_command_stream(run_cmd : list[str], exe_path : Path, input : str|None) -> str:
     '''Runs cmd with mpi, returning stdout. Additionally streams stdout while cmd is running.'''
 
     if not exe_path.exists():
         raise FileNotFoundError(f"Could not find executable at {exe_path}.")
-
-    cmd = [
-        run_cmd,
-        '-n' if run_cmd == 'srun' else '-np',
-        str(ncores),
-        str(exe_path)
-    ]
+    
+    run_cmd.append(str(exe_path))
 
     proc = subprocess.Popen(
-        cmd,                        # the full command line as a list
+        run_cmd,                    # the full command line as a list
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -83,7 +78,7 @@ def run_command_stream(exe_path : Path, input : str|None, ncores : int, run_cmd 
 
     if proc.returncode != 0:
         raise RuntimeError(
-            f"Command {cmd!r} failed with exit code {returncode}.\n"
+            f"Command {run_cmd!r} failed with exit code {returncode}.\n"
             f"Output was:\n{output}"
         )
 

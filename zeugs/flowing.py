@@ -26,7 +26,7 @@ def gen_input_initial(ns : int, nt : int, iseed : int|None = None) -> str:
 
 
 
-def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path, ncores : int, run_cmd : str = 'srun') -> str:
+def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path, run_cmd : list[str]) -> str:
     '''Do sweeps amount of heat bath sweeps.
     input_initial: prompt, nx, ny, nz, nt.'''
     
@@ -41,16 +41,17 @@ def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path, 
         fresh
         no_gauge_fix
         save_serial {lat_out}
+        save_dir /
         '''
     
-    return run_command_stream(Path("../pure_gauge/su3_ora"), input_initial, ncores, run_cmd)
+    return run_command_stream(run_cmd, Path("../pure_gauge/su3_ora"), input_initial)
 
 
 
 
 
-def gen_configs_ora( configs : int, every_nth : int, beta : float, lat_initial : Path|None,
-                     save_dir : Path, input_initial : str, ncores : int, run_cmd : str = 'srun' ) -> str:
+def gen_configs_ora( configs : int, every_nth : int, beta : float,
+                     lat_initial : Path|None, save_dir : Path, input_initial : str, run_cmd : list[str] ) -> str:
     '''Takes a start config from which it generates new ones, saving every measurement interval.'''
 
     input_gen = \
@@ -67,7 +68,7 @@ def gen_configs_ora( configs : int, every_nth : int, beta : float, lat_initial :
         save_dir {save_dir}
         '''
     
-    return run_command_stream(Path("../pure_gauge/su3_ora"), input_initial + input_gen, ncores, run_cmd)
+    return run_command_stream(run_cmd, Path("../pure_gauge/su3_ora"), input_initial + input_gen)
 
 
 
@@ -98,7 +99,7 @@ def flow_params(n_steps : int, Nt : int, r_max : float = 0.25) -> tuple[float, f
 
 
 
-def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : str, ncores : int, run_cmd : str = 'srun') -> str:
+def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : str, run_cmd : list[str]) -> str:
     '''Flows lat_initial to flow times (rkmk3).
     input_initial: prompt, nx, ny, nz, nt.'''
 
@@ -119,13 +120,13 @@ def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : 
             '''
         tf_current = tf
 
-    return run_command_stream(Path("../wilson_flow/region_flow_rkmk3"), input_initial, ncores, run_cmd)
+    return run_command_stream(run_cmd, Path("../wilson_flow/region_flow_rkmk3"), input_initial)
 
 
 
 
 
-def flow_rkmk3(stoptime : float, stepsize : float, lat_initial : Path, input_initial : str, flow : str, ncores : int, run_cmd : str = 'srun') -> str:
+def flow_rkmk3(stoptime : float, stepsize : float, lat_initial : Path, input_initial : str, flow : str, run_cmd : list[str]) -> str:
     '''Flows lat_initial with given stoptime and stepsize using gradient flow with rkmk3 integrator.
     input_initial: prompt, nx, ny, nz, nt.'''
     
@@ -139,7 +140,7 @@ def flow_rkmk3(stoptime : float, stepsize : float, lat_initial : Path, input_ini
         forget
         '''
     
-    return run_command_stream(Path("../wilson_flow/region_flow_rkmk3"), input_initial + input_flow, ncores, run_cmd)
+    return run_command_stream(run_cmd, Path("../wilson_flow/region_flow_rkmk3"), input_initial + input_flow)
 
 
 

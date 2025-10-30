@@ -38,6 +38,12 @@ save_dir = scratch_path / 'gauge_configs' / f'branch{branch}'
 
 
 
+run_cmd = [
+    'srun',
+    '--exclusive',
+    '-n',
+    str(ncores),
+]
 
 
 # outputs is livestreamed to stdout AND saved in the end into out
@@ -53,8 +59,7 @@ out = gen_configs_ora(
 
     input_initial = gen_input_initial(ns, nt, iseed),
 
-    ncores        = ncores,
-    run_cmd       = 'srun'
+    run_cmd       = run_cmd
 
 )
 
