@@ -3,8 +3,8 @@
 
 #SBATCH -J pg_gen_3on1node
 #SBATCH --mail-type=END
-#SBATCH -e /work/scratch/ln29bamu/outputs/%x.err.%j
-#SBATCH -o /work/scratch/ln29bamu/outputs/%x.out.%j
+#SBATCH -e /work/scratch/ln29bamu/outputs/branch1-14c_runs/%x.err.%j
+#SBATCH -o /work/scratch/ln29bamu/outputs/branch1-14c_runs/%x.out.%j
 #
 #SBATCH -N 1                 # Anzahl der Nodes
 #SBATCH -n 96                # Anzahl der Prozesse
@@ -22,18 +22,19 @@ module load openmpi python
 cd /home/ln29bamu/code/milc_luis/zeugs
 
 # Directory for logs
-OUTDIR=/work/scratch/ln29bamu/outputs
+OUTDIR=/work/scratch/ln29bamu/outputs/branch1-14c_runs
 
 
 TOTAL_CORES=$SLURM_NTASKS
-NRUNS=3
-CORES_PER_RUN=$(( TOTAL_CORES / NRUNS ))
+NRUNS=2
+CORES_PER_RUN=32
+# CORES_PER_RUN=$(( TOTAL_CORES / NRUNS ))
 
 
 # Parameters for each run
 # !!!!! important
 # determine into which folder configs are saved
-param_set1=("0" "1" "2")    # branch numbers
+param_set1=("1" "2")    # branch numbers
 
 
 for i in $(seq 0 $((NRUNS-1))); do

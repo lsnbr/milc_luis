@@ -21,8 +21,6 @@ beta = 6.868    # depends on nt and T_Tc
 number_of_saved_configs = 2
 save_every_nth_config   = 10
 
-scratch_path = Path('/work/scratch/ln29bamu')
-lattice_initial = scratch_path / 'gauge_configs' / 'init' / 'pg_00020000.lat'
 
 
 
@@ -31,7 +29,9 @@ ncores, branch = map(int, sys.argv[1:])
 
 iseed = 2314 + 1_000_000*branch
 
-save_dir = scratch_path / 'gauge_configs' / f'branch{branch}'
+scratch_path    = Path('/work/scratch/ln29bamu')
+lattice_initial = scratch_path / 'gauge_configs' / f'branch{branch}' / 'pg_00006000.lat'
+save_dir        = scratch_path / 'gauge_configs' / f'branch{branch}c'
 
 
 
