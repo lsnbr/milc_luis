@@ -1,0 +1,16 @@
+com_qmp: set thread-safety level to 0
+Wilson/Symanzik/Zeuthen Flow application
+MIMD version 7
+Machine = QMP (portable), with 4 nodes
+Host(0) = DESKTOP-I270KUE
+Username = luis
+start: Sat Nov  1 12:31:11 2025
+
+Options selected...
+Generic double precision
+C_GLOBAL_INLINE
+type 0 for no prompts, 1 for prompts, or 2 for proofreading
+
+get_prompt: ERROR IN INPUT: initial prompt
+exit: Sat Nov  1 12:31:11 2025
+

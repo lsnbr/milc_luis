@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 
-@dataclass(frozen=True)
+@dataclass
 class Measurements:
 
     rtime_q    : float  # time in seconds for q=FF* computation
@@ -43,10 +43,10 @@ FlowMeasurements = list[Measurements]
 
 
 
-def parse_flow_output(output : str) -> FlowMeasurements:
+def parse_flow_output(output : str, flowtimes : list[str]|None = None) -> FlowMeasurements:
     '''parsing output of wilson_flow program'''
 
-    flow_measurements = []
+    flow_measurements : FlowMeasurements = []
 
     for section in re.split(r'\s*\n\n\s*', output):
         if not section.startswith('Time to complete flowstep'): continue
@@ -63,8 +63,21 @@ def parse_flow_output(output : str) -> FlowMeasurements:
         
         flow_measurements.append(Measurements(rtime_q, rtime_fft, rtime_flow, *obs, corrs))
 
+    # fix flowtimes
+    if flowtimes is not None:
+        if len(flowtimes) != len(flow_measurements): raise Exception('wrong number of flowtimes :(')
+        for flowtime, flowmeas in zip(flowtimes, flow_measurements):
+            flowmeas.flow_time = flowtime
+
     return flow_measurements
 
+
+
+
+def extract_flowtimes(flow_measurements : FlowMeasurements) -> list[float]:
+    '''Extract flowtimes from list of measurements.'''
+
+    return [meas.flow_time for meas in flow_measurements]
 
 
 
@@ -89,6 +102,38 @@ def radial_separations(ns : int) -> list[float]:
     '''list of all reachable distances r on the lattice.'''
 
     return [r2**.5 for r2, count in enumerate(radial_multiplicities(ns)) if count > 0]
+
+
+
+def bin_by_distance(distances : list[float], values : list[float], bin_size : float) -> tuple[list[float], list[float]]:
+    '''Makes bins of r-extent bin_size. Different bins may (certainly) enclose different numbers of values.
+    Returns [list of middle r values of bins], [list of values averaged per bin].'''
+
+    # final results
+    r_binned = []
+    v_binned = []
+
+    # current bin
+    r_left = 0
+    rbin = []
+    vbin = []
+
+    for r, v in zip(distances, values, strict=True):
+        if r <= r_left + bin_size*(1+1e-6):   # small leeway to counter floating point imprecisions
+            rbin.append(r)
+            vbin.append(v)
+        else:
+            r_binned.append(r_left + bin_size/2)    # uses midpoint of bin, could also use average
+            v_binned.append(sum(vbin) / len(vbin))
+            while r > r_left + bin_size*(1+1e-6): r_left += bin_size
+            rbin = [r]
+            vbin = [v]
+
+    if abs(r - (r_left + bin_size)) < bin_size*1e-6:
+        r_binned.append(r_left + bin_size/2)
+        v_binned.append(sum(vbin) / len(vbin))
+
+    return r_binned, v_binned
 
 
 
@@ -119,7 +164,8 @@ def get_correlators(ensemble : list[FlowMeasurements], t : int, tf : float) -> t
     Then for each data point, compute its mean and standard deviation.
     Returns [s values], [G(t,s) values], [G(t,s) errors].'''
     
-    if len(ensemble) == 0:
+    N = len(ensemble)
+    if N == 0:
         raise Exception('Empty ensemble :(')
 
     # for each s^2 store the value of each configuration in an array
@@ -139,7 +185,7 @@ def get_correlators(ensemble : list[FlowMeasurements], t : int, tf : float) -> t
 
     return s_list, \
            [data.mean() for data in data_all_s], \
-           [np.std(data) for data in data_all_s]
+           [np.std(data) / np.sqrt(N) for data in data_all_s]    # / sqrt(N) since this err of sample mean not sample
 
         
 
@@ -151,7 +197,22 @@ def get_correlators(ensemble : list[FlowMeasurements], t : int, tf : float) -> t
 
 
 
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
+
+
+    # stuff
+    if 0:
+
+        r_vals = radial_separations(64)
+        print(len(r_vals))
 
 
 
@@ -182,38 +243,44 @@ if __name__ == '__main__':
 
 
 
+    # test flow time fixing
+    if 0:
+
+        flowtimes = [0.1, 0.2, 0.3]
+
+        flow_meas = parse_flow_output(
+            Path('outputs/flow_test.txt').read_text(),
+            flowtimes
+        )
+
+        print([meas.flow_time for meas in flow_meas])
+
+        
+
 
 
 
     # ensemble flow
     if 0:
 
-        from statana import search_uncorr
 
         data : list[FlowMeasurements] = []
 
         for i in range(100):
-            with open(Path('outputs') / f'flow_out_{i:05}.txt', 'r', encoding='utf-8') as f:
+            with open(Path('outputs') / 'ns16nt16skip10' / f'flow_out_{i:05}.txt', 'r', encoding='utf-8') as f:
                 flow_output = f.read()
             data.append(parse_flow_output(flow_output))
 
         print()
 
 
-        # iq_ftmax = np.array([ d[-1].charge for d in data ])
-        # plt.scatter(range(len(iq_ftmax)), iq_ftmax)
-        # plt.ylim(-1.5, 1.5)
-        # plt.xlabel('config')
-        # plt.ylabel('icharge')
-        # plt.savefig('plot_charge.png')
-        # search_uncorr(iq_ftmax)
-
 
         print(', '.join(f'{meas.flow_time:.2f}' for meas in data[0]))
 
-        t=4
-        tf=0.43
+        t=2
+        tf=0.23
         s_vals, corr_vals, corr_errors = get_correlators(data, t=t, tf=tf)
+
 
         s2_max = round(s_vals[-1]**2)
         ns = round(2 * (s2_max/3)**.5)
@@ -222,16 +289,18 @@ if __name__ == '__main__':
         
         # print(f'corrs = {[v for v,e in correlators]}\n')
 
-        plt.errorbar( s_vals ,
-                      corr_vals,
-                      yerr=corr_errors,
-                      elinewidth=1,
-                      marker='o',
-                      markersize=3 )
+        plt.errorbar(
+            x          = s_vals ,
+            y          = corr_vals,
+            yerr       = corr_errors,
+            elinewidth = 1,
+            marker     = 'o',
+            markersize = 3 
+        )
         plt.xlabel('spatial distance')
         plt.ylabel('corr')
         plt.title(f'tau={t}, tf={tf}')
-        plt.savefig('plot_corr.png')
+        plt.savefig('plots/plot_corr.png')
 
 
     

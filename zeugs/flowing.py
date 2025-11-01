@@ -99,7 +99,7 @@ def flow_params(n_steps : int, Nt : int, r_max : float = 0.25) -> tuple[float, f
 
 
 
-def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : str, run_cmd : list[str]) -> str:
+def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : str, flow : str, run_cmd : list[str]) -> str:
     '''Flows lat_initial to flow times (rkmk3).
     input_initial: prompt, nx, ny, nz, nt.'''
 
@@ -112,9 +112,9 @@ def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : 
         input_initial += \
             f'''
             {f'reload_serial {lat_initial}' if i==0 else 'continue'}
-            zeuthen
+            {flow}
             exp_order 8
-            stepsize {tf_step if tf_step>0 else 111}
+            stepsize {tf_step if tf_step>0 else 11111}
             stoptime {tf_step}
             forget
             '''
@@ -141,6 +141,34 @@ def flow_rkmk3(stoptime : float, stepsize : float, lat_initial : Path, input_ini
         '''
     
     return run_command_stream(run_cmd, Path("../wilson_flow/region_flow_rkmk3"), input_initial + input_flow)
+
+
+
+
+def flow_adpt(stoptime : float, stepsize : float, local_tol : float, lat_initial : Path, input_initial : str, flow : str, run_cmd : list[str]) -> str:
+    '''Flows lat_initial with given stoptime and local_tol (and initial stepsize) using gradient flow with rkmk3 adaptive stepsize.
+    input_initial: prompt, nx, ny, nz, nt.'''
+    
+    input_flow = \
+        f'''
+        reload_serial {lat_initial}
+        {flow}
+        exp_order 8
+        stepsize {stepsize}
+        local_tol {local_tol}
+        stoptime {stoptime}
+        forget
+        '''
+    
+    # print('XXXXXXXXX')
+    # print()
+    # print()
+    # print(repr(input_initial + input_flow))
+    # print()
+    # print()
+    # print('XXXXXXXXX')
+    
+    return run_command_stream(run_cmd, Path("../wilson_flow/region_flow_adpt"), input_initial + input_flow)
 
 
 

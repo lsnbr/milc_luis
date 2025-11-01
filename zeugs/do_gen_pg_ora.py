@@ -7,6 +7,12 @@ from flowing import gen_input_initial, gen_configs_ora
 
 
 
+slurm = True
+
+ncores  = int(os.environ['SLURM_NTASKS']) if slurm else 4
+run_cmd = ['srun' if slurm else 'mpirun', '-n', str(ncores)]
+
+
 
 
 
@@ -33,19 +39,14 @@ scratch_path    = Path('/work/scratch/ln29bamu')
 lattice_initial = scratch_path / 'gauge_configs' / f'branch{branch}' / 'pg_00006000.lat'
 save_dir        = scratch_path / 'gauge_configs' / f'branch{branch}c'
 
-
-ncores = int(os.environ['SLURM_NTASKS'])
-
-
+# lattice_initial = None
+# save_dir = Path('/home/luis/codeundso/milc_luis/zeugs') / 'gauge_configs'
 
 
 
 
-run_cmd = [
-    'srun',
-    '-n',
-    str(ncores),
-]
+
+
 
 
 # outputs is livestreamed to stdout AND saved in the end into out
@@ -70,7 +71,7 @@ out = gen_configs_ora(
 
 
 
-# redirect stdout in sbatch file instead
+# saves output in file
 # (Path('outputs') / 'ora_test.txt').write_text(out)
 
 

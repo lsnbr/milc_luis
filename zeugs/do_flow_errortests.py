@@ -3,8 +3,8 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
-from flowing import flow_rkmk3, flow_params, gen_input_initial, radius_to_flowtime
-from measurements import parse_flow_output, make_distance_corr_arrays, radial_separations, radial_multiplicities
+from flowing import flow_rkmk3, flow_adpt, flow_params, gen_input_initial, radius_to_flowtime
+from measurements import parse_flow_output, make_distance_corr_arrays, radial_separations, radial_multiplicities, bin_by_distance
 
 
 
@@ -16,31 +16,37 @@ from measurements import parse_flow_output, make_distance_corr_arrays, radial_se
 ############################################################
 
 
-cluster = False
+SLURM = False
 
-ncores  = int(os.environ['SLURM_NTASKS']) if cluster else 4
-run_cmd = 'srun' if cluster else 'mpirun'
+ncores  = int(os.environ['SLURM_NTASKS']) if SLURM else 4
+run_cmd = ['srun' if SLURM else 'mpirun', '-n', str(ncores)]
 
 
 
 
 nt = 16
-ns = 64
+ns = 16
 
 flow_type = 'zeuthen'
 
-lattice_initial = Path('gauge_configs') / 'pg_00009.lat'
+lattice_initial = Path('gauge_configs') / 'pg_00000100.lat'
 
 
 
 
 rf_max = 0.125  # in units of beta
 
-# stepsizes = (2^0, 2^1, 2^2, ..., 2^max_log_steps)
-max_log_steps = 5
+ADAPTIVE = True
+
+# local_tol's if adaptive else number of steps
+flow_precisions = (
+    [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+    if ADAPTIVE else
+    [2, 4, 8, 16, 32]
+)
 
 # location of flow output files
-file = lambda ln: Path('outputs') / 'flow_err_test' / 'zeuthen' / f'flow_ln={ln}.txt'
+file = lambda prec: Path('outputs') / 'flow_err_test' / 'zeuthen' / (f'flow_tol={prec:e}.txt' if ADAPTIVE else f'flow_n={prec}.txt')
 
 
 
@@ -53,76 +59,45 @@ file = lambda ln: Path('outputs') / 'flow_err_test' / 'zeuthen' / f'flow_ln={ln}
 
 
 # compute flows for various stepsizes, skip if already done
-for ln in range(max_log_steps + 1):
-    if file(ln).exists(): continue
+for prec in flow_precisions:
+    if file(prec).exists(): continue
 
-    stoptime, stepsize = flow_params(2**ln, nt, rf_max)
-    out = flow_rkmk3(
-        stoptime      = stoptime,
-        stepsize      = stepsize,
-        lat_initial   = lattice_initial,
-        input_initial = gen_input_initial(ns, nt),
-        flow          = flow_type,
-        ncores        = ncores,
-        run_cmd       = run_cmd
-    )
-    file(ln).write_text(out)
+    if ADAPTIVE:
+        out = flow_adpt(
+            stoptime    = radius_to_flowtime(rf_max, nt), stepsize      = radius_to_flowtime(1/nt, nt),
+            local_tol   = prec,
+            lat_initial = lattice_initial,                input_initial = gen_input_initial(ns, nt),
+            flow        = flow_type,                      run_cmd       = run_cmd
+        )
+
+    else:
+        stoptime, stepsize = flow_params(prec, nt, rf_max)
+        out = flow_rkmk3(
+            stoptime    = stoptime,        stepsize      = stepsize,
+            lat_initial = lattice_initial, input_initial = gen_input_initial(ns, nt),
+            flow        = flow_type,       run_cmd       = run_cmd
+        )
+
+    file(prec).write_text(out)
 
 
 
-# extract final flowtime measurement for each stepsize ln
-finalmeas_for_ln = [parse_flow_output(file(ln).read_text())[-1] for ln in range(max_log_steps + 1)]
+# extract final flowtime measurement for each precision (local_tol or number of steps)
+finalmeas_for_prec = [parse_flow_output(file(prec).read_text())[-1] for prec in flow_precisions]
 
 # some checks
-assert len(finalmeas_for_ln[0].q_corrs) == (nt//2)
-assert len(finalmeas_for_ln[0].q_corrs[0]) == (3*(ns//2)**2 + 1)
-for ln in range(max_log_steps+1):
-    assert finalmeas_for_ln[ln].flow_time == radius_to_flowtime(rf_max, nt)
+assert len(finalmeas_for_prec[0].q_corrs) == (nt//2)
+assert len(finalmeas_for_prec[0].q_corrs[0]) == (3*(ns//2)**2 + 1)
+for iprec, prec in enumerate(flow_precisions):
+    assert finalmeas_for_prec[iprec].flow_time == radius_to_flowtime(rf_max, nt)
 
 
 
 # extract G(r) data series for each ln and each tau
-corrs_ln_tau_r = []
-for meas in finalmeas_for_ln:
-    corrs_ln_tau_r.append([ make_distance_corr_arrays(corrs_r2, False)[1]     # calling make_dist... repeatedly could be made much faster
-                            for corrs_r2 in meas.q_corrs ])
-
-
-
-
-
-
-############################################################
-#################  average differences  ####################
-############################################################
-
-
-relative = False        # relative or absolute differences
-n_used_rvals = 100      # use only the first 100 values of r
-
-
-# ln's elements is diff between ln and ln+1
-diff_for_ln    = []    
-differr_for_ln = []   
-
-
-# compute average difference of correlators C(t,r) between two different stepsizes
-for ln in range(max_log_steps):
-    sq_diff_vals = []
-
-    for tslice0, tslice1 in zip(corrs_ln_tau_r[ln], corrs_ln_tau_r[ln+1]):
-        for corr0, corr1 in zip(tslice0, tslice1):
-
-            mid  = (corr0 + corr1) / 2
-            diff = corr1 - corr0
-            sq_diff_vals.append( (diff/mid if relative else diff)**2 )
-
-    mean_sq_diff      = sum(sq_diff_vals[:n_used_rvals]) / len(sq_diff_vals[:n_used_rvals])
-    root_mean_sq_diff = np.sqrt(mean_sq_diff)
-    diff_for_ln.append(root_mean_sq_diff)
-
-    # do variance...
-    ...
+corrs_prec_tau_r = []
+for meas in finalmeas_for_prec:
+    corrs_prec_tau_r.append([ make_distance_corr_arrays(corrs_r2, False)[1]     # calling make_dist... repeatedly could be made much faster
+                              for corrs_r2 in meas.q_corrs ])
 
 
 
@@ -134,33 +109,43 @@ for ln in range(max_log_steps):
 ############################################################
 
 
-tau = 2     # plot for some fixed tau
-nth = 10     # only take every nth r (starts with first) 
+tau = 3      # plot for some fixed tau
+rbs = 1      # r-binsize
+
+RELATIVE = True
 
 
 # list of possible radial separations (every nth)
 r_vals  = radial_separations(ns)
 dr_vals = radial_multiplicities(ns)
 
-# ln is difference between ln and ln+1
-diff_ln_tau_r = []
-
-for ln in range(max_log_steps):
-    diff_ln_tau_r.append([ [abs(corr1 - corr0) for corr0, corr1 in zip(tslice0, tslice1)] 
-                           for tslice0, tslice1 in zip(corrs_ln_tau_r[ln], corrs_ln_tau_r[ln+1]) ])
 
 
+# prec is difference between prec and prec+1
+diff_prec_tau_r = []
 
-for ln, diff_tau_r in enumerate(diff_ln_tau_r):
-    plt.plot(r_vals[::nth], diff_tau_r[tau][::nth], label=f'{ln=}')
-    # plt.scatter(x=r_vals[::nth], y=diff_tau_r[tau][::nth], label=f'{ln=}')
+for iprec, prec in enumerate(flow_precisions[:-1]):
+    diff_tau_r = []
+
+    for corrs_r0, corrs_r1 in zip(corrs_prec_tau_r[iprec], corrs_prec_tau_r[iprec+1]):
+        diff_tau_r.append([ abs( (corr1-corr0) / (corr1 if RELATIVE else 1) )
+                            for corr0, corr1 in zip(corrs_r0, corrs_r1)       ])
+        
+    diff_prec_tau_r.append(diff_tau_r)
+
+
+
+for prec, diff_tau_r in zip(flow_precisions[:-1], diff_prec_tau_r, strict=True):
+    label = f'local_tol={prec:.2e}' if ADAPTIVE else f'nsteps={prec}'
+    plt.plot(*bin_by_distance(r_vals, diff_tau_r[tau], rbs), label=label, marker='o', ms=3, alpha=0.75)
+    # plt.scatter(*bin_by_distance(r_vals, diff_tau_r[tau], rbs), label=label', s=4)
 
 plt.yscale('log')
-plt.xlabel('separation r')
+plt.xlabel('separation r (binned)')
 plt.ylabel(f'Diff({tau=}, r; ln)')
 plt.title('Diff(tau, r; ln) = C(tau, r; ln+1) - C(tau, r; ln)')
 plt.legend()
-plt.savefig( Path('plots') / 'flow_errors_r.png' )
+plt.savefig( Path('plots') / f'flow_errors_binned_{'adpt' if ADAPTIVE else 'fixed'}_{'rel' if RELATIVE else 'abs'}.png' )
 
 
 
@@ -170,32 +155,3 @@ plt.savefig( Path('plots') / 'flow_errors_r.png' )
 
 
 
-
-
-
-# plot the errors
-if 0:
-    plt.errorbar(
-        x      = [2**ln for ln in range(max_log_steps)],
-        y      = diff_for_ln,
-        # yerr   = differr_for_ln,
-        marker = 'o',
-    )
-    # plt.ylim(0, diff_for_ln[1] * 1.5)
-    plt.yscale('log')
-    plt.xlabel('Number n of flow-steps')
-    plt.ylabel('Average absolute error between n and 2n flow-steps')
-    plt.savefig('plots/plot_flow_wilson_error.png')
-
-
-# plot some correlators
-if 0:
-    tau = 3
-    ln0, ln1 = max_log_steps-1, max_log_steps
-    r_vals = radial_separations(ns)[:100]
-    plt.scatter(r_vals, corrs_ln_tau_r[ln0][tau][:100], s=0.3, label=f'{tau=}, ln={ln0}')
-    plt.scatter(r_vals, corrs_ln_tau_r[ln1][tau][:100], s=0.3, label=f'{tau=}, ln={ln1}')
-    plt.xlabel('radial separation r')
-    plt.ylabel('C(tau,r)')
-    plt.legend()
-    plt.savefig('plots/plot_some_corrs_stepsizes.png')
