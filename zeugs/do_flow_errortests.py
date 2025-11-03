@@ -34,13 +34,13 @@ lattice_initial = Path('gauge_configs') / 'pg_00000100.lat'
 
 
 
-rf_max = 0.125  # in units of beta
+rf_max = 0.25  # in units of beta
 
 ADAPTIVE = True
 
 # local_tol's if adaptive else number of steps
 flow_precisions = (
-    [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+    [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
     if ADAPTIVE else
     [2, 4, 8, 16, 32]
 )

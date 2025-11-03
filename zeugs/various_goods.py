@@ -48,10 +48,10 @@ def run_command_stream(run_cmd : list[str], exe_path : Path, input : str|None) -
     if not exe_path.exists():
         raise FileNotFoundError(f"Could not find executable at {exe_path}.")
     
-    run_cmd.append(str(exe_path))
+    cmd = run_cmd + [str(exe_path)]
 
     proc = subprocess.Popen(
-        run_cmd,                    # the full command line as a list
+        cmd,                        # the full command line as a list
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -78,7 +78,7 @@ def run_command_stream(run_cmd : list[str], exe_path : Path, input : str|None) -
 
     if proc.returncode != 0:
         raise RuntimeError(
-            f"Command {run_cmd!r} failed with exit code {returncode}.\n"
+            f"Command {cmd!r} failed with exit code {returncode}.\n"
             f"Output was:\n{output}"
         )
 
