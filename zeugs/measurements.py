@@ -138,14 +138,15 @@ def bin_by_distance(distances : list[float], values : list[float], bin_size : fl
 
 
 
-def make_distance_corr_arrays(radial_corrs : list, normalize : bool) -> tuple[list, list]:
+def make_distance_corr_arrays(radial_corrs : list, normalize : bool, ds_list : list[float]|None = None) -> tuple[list, list]:
     '''Takes a list where the index corresponds to s^2.
     Removes all unreachable s^2 and returns [s] and [G(s)] ([G(s) / ds] if normalize is true).'''
 
     s2_max = len(radial_corrs) - 1
     ns = round(2 * (s2_max/3)**.5)
 
-    ds_list = radial_multiplicities(ns)
+    if ds_list is None:
+        ds_list = radial_multiplicities(ns)
     s_list = []
     G_list = []
 

@@ -61,9 +61,9 @@ run_gradient_flow( int region_flag ) {
 
   /* (nt/2 * (s2_max+1)) array of doubles for correlators */
   int s2_max = (nx/2)*(nx/2) + (ny/2)*(ny/2) + (nz/2)*(nz/2);
-  double** corrs = malloc((nt/2) * sizeof(double*));
-  corrs[0] = malloc((nt/2) * (s2_max+1) * sizeof(double));
-  for (int ii = 1; ii < (nt/2); ii++) {
+  double** corrs = malloc((nt/2+1) * sizeof(double*));
+  corrs[0] = malloc((nt/2+1) * (s2_max+1) * sizeof(double));
+  for (int ii = 1; ii < (nt/2+1); ii++) {
     corrs[ii] = corrs[0] + ii * (s2_max+1);
   }
 
@@ -342,11 +342,11 @@ run_gradient_flow( int region_flag ) {
 
     /* Print correlators */
     node0_printf("q-corrs");
-    for (int t_corr = 0; t_corr < nt/2; t_corr++) {
+    for (int t_corr = 0; t_corr < nt/2+1; t_corr++) {
       for (int s2_corr = 0; s2_corr <= s2_max; s2_corr++) {
         node0_printf(" %.16g", corrs[t_corr][s2_corr]);
       }
-      if (t_corr != nt/2 - 1) {
+      if (t_corr != nt/2) {
         node0_printf(",");
       }
     }

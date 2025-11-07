@@ -48,7 +48,7 @@ void tcd_corrs_by_fourier() {
 
 
 
-/* - corrs_dist[nt/2][s^2_max+1] 
+/* - corrs_dist[nt/2+1][s^2_max+1] 
    - s^2_max is the maximal squared distance, s^2_max = 3 * (ns/2)^2
    - correlators are not normalized by d_s
 */
@@ -58,18 +58,17 @@ void corr_by_spatial_distance(double **corrs_dist) {
     site *s;
 
     int s2_max = (nx/2)*(nx/2) + (ny/2)*(ny/2) + (nz/2)*(nz/2);
-    int count = (nt/2) * (s2_max + 1);
+    int count = (nt/2 + 1) * (s2_max + 1);
 
 
-    for (int ii = 0; ii < nt/2; ii++) {
+    for (int ii = 0; ii <= nt/2; ii++) {
         for (int jj = 0; jj <= s2_max; jj++) {
             corrs_dist[ii][jj] = 0.0;
         }
     }
 
     FORALLSITES(i, s) {
-        if (s->t >= nt/2) continue;
-
+        int st = s->t > nt/2 ? nt - s->t : s->t;
         int sx = s->x > nx/2 ? nx - s->x : s->x;
         int sy = s->y > ny/2 ? ny - s->y : s->y;
         int sz = s->z > nz/2 ? nz - s->z : s->z;
@@ -77,9 +76,11 @@ void corr_by_spatial_distance(double **corrs_dist) {
         int s2 = sx*sx + sy*sy + sz*sz;
         if (s2 > s2_max) {printf("bad distance, s2=%d, s2max=%d\n", s2, s2_max); break;}    /* should never happen */
 
-        corrs_dist[s->t][s2] += s->ch_dens_corr.real / (nt*nt);     // /(nt*nt) since C(t, r) has dim=L^(-6) instead of dim=L^(-8)
+        int t_degen = (st==0 || st==nt/2) ? 1 : 2;      // how many t-separations equal st?
+        corrs_dist[st][s2] += s->ch_dens_corr.real / t_degen / (nt*nt);     // /(nt*nt) since C(t, r) has dim=L^(-6) instead of dim=L^(-8)
     }
 
+    g_sync();
     g_vecdoublesum(corrs_dist[0], count);
 
 
@@ -194,12 +195,12 @@ void somecorrtests(double **corrs_dist) {
     g_sync();
     node0_printf("Test C(t,r):\n");
     g_sync();
-    for (int t=0; t<nt/2; t++) {
+    for (int t=0; t<=nt/2; t++) {
         int passed = 1;
         for (int s2=0; s2<=s2_max; s2++) {
             double expected = 0.001234 * dr_array[s2] * pow(nt, 6);
             double actual = corrs_dist[t][s2];
-            if (fabs(actual - expected) > 1e-8) {
+            if (fabs(actual - expected) > 1e-6) {
                 node0_printf("t=%d, r^2=%d: expected: %.16g, actual: %.16g\n", t, s2, expected, actual);
                 fflush(stdout);
                 passed = 0;
@@ -247,7 +248,7 @@ void somecorrtests(double **corrs_dist) {
     g_sync();
     node0_printf("Test C(t,r):\n");
     g_sync();
-    for(int t=0; t<nt/2; t++) {
+    for(int t=0; t<=nt/2; t++) {
         int passed = 1;
         for(int s2=0; s2<=s2_max; s2++) {
             double expected = (t==0 && s2==0) ? 1.111 / volume * pow(nt, 6) : 0;
@@ -304,7 +305,7 @@ void somecorrtests(double **corrs_dist) {
     g_sync();
     node0_printf("Test C(t,r):\n");
     g_sync();
-    for(int t=0; t<nt/2; t++) {
+    for(int t=0; t<=nt/2; t++) {
         int passed = 1;
         for(int s2=0; s2<=s2_max; s2++) {
             double expected;

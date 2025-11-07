@@ -36,8 +36,8 @@ branch = 0
 iseed = 2314 + 1_000_000*branch
 
 scratch_path    = Path('/work/scratch/ln29bamu')
-lattice_initial = scratch_path / 'gauge_configs' / f'branch{branch}' / 'pg_00006000.lat'
-save_dir        = scratch_path / 'gauge_configs' / f'branch{branch}c'
+lattice_initial = scratch_path / 'gauge_configs' / f'branch{branch}cc' / 'pg_00022200.lat'
+save_dir        = scratch_path / 'gauge_configs' / f'branch{branch}ccc'
 
 # lattice_initial = None
 # save_dir = Path('/home/luis/codeundso/milc_luis/zeugs') / 'gauge_configs'

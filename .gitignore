@@ -15,6 +15,7 @@ localmake
 
 zeugs/gauge_configs/
 zeugs/thermalized_configs/
+zeugs/outputs/16x64flows/init/
 
 pure_gauge/su3_*
 wilson_flow/region_flow_*

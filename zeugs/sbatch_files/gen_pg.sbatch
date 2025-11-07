@@ -1,12 +1,13 @@
 #!/bin/bash
 
 
-#SBATCH -J pg_gen_branch0c
+#SBATCH -J pg_gen_branch0ccc
 #SBATCH --mail-type=END
-#SBATCH -e /work/scratch/ln29bamu/outputs/branch0c_run/%x.err.%j
-#SBATCH -o /work/scratch/ln29bamu/outputs/branch0c_run/%x.out.%j
+#SBATCH -e /work/scratch/ln29bamu/outputs/branch0ccc_run/%x.err.%j
+#SBATCH -o /work/scratch/ln29bamu/outputs/branch0ccc_run/%x.out.%j
 #
 #SBATCH -N 1                 # Anzahl der Nodes
+#SBATCH --exclusive
 #SBATCH -n 64                # Anzahl der Prozesse
 #SBATCH --mem-per-cpu=1G     # Hauptspeicher in MByte pro MPI-Task
 #SBATCH -t 1-                # in Stunden, Minuten und Sekunden (-t 01:30:00), oder (-t 10) - nur Minuten
