@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 def summer_beta(beta : float) -> float:
     '''Calculates r0/a as a function of beta through sommer scale scale setting.
+    Fitted for  5.7 <= beta <= 6.8.
     Parametrisation from [A. Francis, O. Kaczmarek, M. Laine, T. Neuhaus, and H. Ohno, Phys. Rev. D 91, 096002 (2015)]
     Updated coefficients from [Y. Burnier, H. T. Ding, O. Kaczmarek, A. L. Kruse, M. Laine, H. Ohno, and H. Sandmeyer, JHEP 11, 206 (2017)]'''
 
@@ -40,6 +41,14 @@ def find_beta(Nt : int, T_Tc : float, b_min : float = 4, b_max : float = 10) -> 
 
 
 
+def temp_rel_crit(beta : float, Nt : int) -> float:
+    '''Temperatur in units of critical temperature from beta and Nt.'''
+
+    r0_Tc = 0.7457
+    return summer_beta(beta) / Nt / r0_Tc
+
+
+
 
 
 
@@ -53,4 +62,10 @@ if __name__ == '__main__':
     beta = find_beta(Nt, T_Tc)
     print(beta)
 
-    print(summer_beta(beta) / Nt / 0.7457)
+    print(temp_rel_crit(beta, Nt))
+
+
+
+    Nt = 16
+    beta = 6.07
+    print(temp_rel_crit(beta, Nt))

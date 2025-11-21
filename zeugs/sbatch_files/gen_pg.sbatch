@@ -1,10 +1,10 @@
 #!/bin/bash
 
 
-#SBATCH -J pg_gen_branch0ccc
+#SBATCH -J pg_gen_branch0cccc
 #SBATCH --mail-type=END
-#SBATCH -e /work/scratch/ln29bamu/outputs/branch0ccc_run/%x.err.%j
-#SBATCH -o /work/scratch/ln29bamu/outputs/branch0ccc_run/%x.out.%j
+#SBATCH -e /work/scratch/ln29bamu/outputs/branch0cccc_run/%x.err.%j
+#SBATCH -o /work/scratch/ln29bamu/outputs/branch0cccc_run/%x.out.%j
 #
 #SBATCH -N 1                 # Anzahl der Nodes
 #SBATCH --exclusive

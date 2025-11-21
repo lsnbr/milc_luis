@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-#SBATCH -J flow_meas_branch0cc
+#SBATCH -J flow_meas_branch0cccc
 #SBATCH --mail-type=END
 #SBATCH -e /work/scratch/ln29bamu/outputs/%x.err.%j
 #SBATCH -o /work/scratch/ln29bamu/outputs/%x.out.%j
@@ -10,7 +10,7 @@
 #SBATCH --exclusive
 #SBATCH -n 64                # Anzahl der Prozesse
 #SBATCH --mem-per-cpu=1G     # Hauptspeicher in MByte pro MPI-Task
-#SBATCH -t 18:00:00                # in Stunden, Minuten und Sekunden (-t 01:30:00), oder (-t 10) - nur Minuten
+#SBATCH -t 16:00:00                # in Stunden, Minuten und Sekunden (-t 01:30:00), oder (-t 10) - nur Minuten
 
 
 
@@ -24,7 +24,7 @@ source ~/myenv/bin/activate
 cd /home/ln29bamu/code/milc_luis/zeugs
 
 # Begin work (two arguments: first a str specifing which folder in scratch/gauge_configs, second an int specifzing the last gauge config)
-python do_flow_meas.py "branch0cc" 22200
+python do_flow_meas.py "branch0cccc" 20000
 
 
 EXITCODE=$?

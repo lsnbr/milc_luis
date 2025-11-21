@@ -27,8 +27,8 @@ def move_flowfiles(src_folder : Path, dst_folder : Path) -> None:
             ) 
 
 
-src_folder = scratch_path / 'gauge_configs' / 'branch0cc'
-dst_folder = code_path / 'zeugs' / 'outputs' / '16x64flows' / 'branch0cc'
+src_folder = scratch_path / 'gauge_configs' / 'branch0cccc'
+dst_folder = code_path / 'zeugs' / 'outputs' / '16x64flows' / 'branch0cccc'
 
 # move_flowfiles(src_folder, dst_folder)
 
@@ -58,6 +58,6 @@ def append_files(base_folder : Path, new_folder : Path) -> None:
 
 
 base_folder = code_path / 'zeugs' / 'outputs' / '16x64flows' / 'init'
-new_folder  = code_path / 'zeugs' / 'outputs' / '16x64flows' / 'branch0cc'
+new_folder  = code_path / 'zeugs' / 'outputs' / '16x64flows' / 'branch0cccc'
 
 # append_files(base_folder, new_folder)

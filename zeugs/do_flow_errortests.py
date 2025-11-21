@@ -109,7 +109,7 @@ for iprec, prec in enumerate(flow_precisions):
 
 # extract G(r) data series for each ln and each tau
 dr_vals = radial_multiplicities(ns)
-corrs_config_prec_tau_r = [ [ [ make_distance_corr_arrays(corrs_r2, False, dr_vals)[1]
+corrs_config_prec_tau_r = [ [ [ make_distance_corr_arrays(corrs_r2, False, dr_vals)
                                 for corrs_r2 in finalmeas.q_corrs ]
                               for finalmeas in finalmeas_prec ]
                             for finalmeas_prec in finalmeas_config_prec ]
