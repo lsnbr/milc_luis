@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-#SBATCH -J pg_gen_branchc
+#SBATCH -J pg_gen_branchclll
 #SBATCH --mail-type=END
 #SBATCH -e /work/scratch/ln29bamu/outputs/branch1-15c_runs/%x.err.%j
 #SBATCH -o /work/scratch/ln29bamu/outputs/branch1-15c_runs/%x.out.%j
@@ -33,7 +33,7 @@ CORES_PER_RUN=$(( TOTAL_CORES / NRUNS ))
 # Parameters for each run
 # !!!!! important
 # determine into which folder configs are saved
-param_set1=("1" "2" "3")    # branch numbers
+param_set1=("13" "14" "15")    # branch numbers
 
 
 for i in $(seq 0 $((NRUNS-1))); do

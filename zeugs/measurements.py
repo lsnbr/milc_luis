@@ -134,57 +134,27 @@ def find_distance_bins(distances : float, bin_size : float) -> list[tuple[int, i
 
 
 
-def bin_by_distance2(distances : np.ndarray, values : np.ndarray, cov : np.ndarray, bin_size : float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+
+def bin_by_distance2(distances : np.ndarray, values : np.ndarray, cov : np.ndarray|None, bin_size : float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     '''Bin-averages values in bins of r-extent bin_size, computing standart deviations using the covariance matrix cov.
-    Returns [bin-averages of distances], [bin-averages of values], [stderr of bin-averages].'''
+    Returns [bin-averages of distances], [bin-averages of values], [stderr of bin-averages]. The last on only if cov is not None.'''
 
-    r_bins = []
-    v_bins = []
-    e_bins = []
+    bins = find_distance_bins(distances, bin_size)
 
-    for il, ir in find_distance_bins(distances, bin_size):
-        r_bins.append( np.mean(distances[il:ir]) )
-        v_bins.append( np.mean(values[il:ir])    )
-        n   = ir - il
-        var = cov[il:ir, il:ir].sum() / (n*n)
-        if var<=0: print("AAA", var)
-        e_bins.append( np.sqrt(var) )
+    r_bins = np.empty(shape=(len(bins),), dtype=float)
+    v_bins = np.empty(shape=(len(bins),), dtype=float)
+    e_bins = np.empty(shape=(len(bins),), dtype=float)
 
-    return r_bins, v_bins, e_bins
+    for i, (il, ir) in enumerate(bins):
+        r_bins[i] = np.mean(distances[il:ir])
+        v_bins[i] = np.mean(values[il:ir])
+        if cov is not None:
+            n   = ir - il
+            var = cov[il:ir, il:ir].sum() / (n*n)
+            e_bins[i] = np.sqrt(var)
 
+    return (r_bins, v_bins) if cov is None else (r_bins, v_bins, e_bins)
 
-
-
-def bin_by_distance(distances : list[float], values : list[float], bin_size : float) -> tuple[list[float], list[float]]:
-    '''Makes bins of r-extent bin_size.
-
-    Returns [r middle values of bins], [bin-averages of values].'''
-
-    # final results: r-middle, values, errors
-    r_binned = []
-    v_binned = []
-
-    # current bin
-    r_left = distances[0]
-    rbin = []
-    vbin = []
-
-    for r, v in zip(distances, values, strict=True):
-        if r <= r_left + bin_size*(1+1e-6):   # small leeway to counter floating point imprecisions
-            rbin.append(r)
-            vbin.append(v)
-        else:
-            r_binned.append(r_left + bin_size/2)    # uses midpoint of bin, could also use average
-            v_binned.append(sum(vbin) / len(vbin))
-            while r > r_left + bin_size*(1+1e-6): r_left += bin_size
-            rbin = [r]
-            vbin = [v]
-
-    if abs(r - (r_left + bin_size)) < bin_size*1e-6:
-        r_binned.append(r_left + bin_size/2)
-        v_binned.append(sum(vbin) / len(vbin))
-
-    return r_binned, v_binned
 
 
 
