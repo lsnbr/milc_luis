@@ -87,7 +87,7 @@ def extract_flowtimes(flow_measurements : FlowMeasurements) -> list[float]:
 
 
 
-def radial_multiplicities(ns : int) -> list[int]:
+def radial_multiplicities(ns : int) -> np.ndarray:
     '''result[s^2] is number of cells in a ns^3 lattice with distance s^2.'''
 
     s2_max = 3 * (ns//2)**2
@@ -98,20 +98,20 @@ def radial_multiplicities(ns : int) -> list[int]:
         s2 = x**2 + y**2 + z**2
         result[s2] += 1
 
-    return result
+    return np.array(result, dtype=int)
 
 
 
 
-def radial_separations(ns : int) -> list[float]:
+def radial_separations(ns : int) -> np.ndarray:
     '''list of all reachable distances r on the lattice.'''
 
-    return [r2**.5 for r2, count in enumerate(radial_multiplicities(ns)) if count > 0]
+    return np.array([r2**.5 for r2, count in enumerate(radial_multiplicities(ns)) if count > 0], dtype=float)
 
 
 
 
-def find_distance_bins(distances : float, bin_size : float) -> list[tuple[int, int]]:
+def find_distance_bins(distances : np.ndarray, bin_size : float) -> list[tuple[int, int]]:
     '''Finds indx pairs (il, ir) such that distances[il:ir] contain distances in a range of bin_size.
     Assumes distances is non-empty and monotonically rising.'''
 
@@ -135,7 +135,29 @@ def find_distance_bins(distances : float, bin_size : float) -> list[tuple[int, i
 
 
 
-def bin_by_distance2(distances : np.ndarray, values : np.ndarray, cov : np.ndarray|None, bin_size : float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def bin_averages(bins : list[tuple[int, int]], values : np.ndarray) -> np.ndarray:
+    '''Bin values and compute its averages.'''
+
+    values_binned = np.empty(shape=(len(bins),), dtype=float)
+    for ibin, (il, ir) in enumerate(bins):
+        values_binned[ibin] = values[il:ir].mean()
+    return values_binned
+
+
+
+def bin_distances(ns : int, bin_size : float) -> np.ndarray:
+    '''Average distances of each bin.'''
+
+    distances = radial_separations(ns)
+    return bin_averages(
+        find_distance_bins(distances, bin_size),
+        distances
+    )
+
+
+
+
+def bin_by_distance(distances : np.ndarray, values : np.ndarray, cov : np.ndarray|None, bin_size : float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     '''Bin-averages values in bins of r-extent bin_size, computing standart deviations using the covariance matrix cov.
     Returns [bin-averages of distances], [bin-averages of values], [stderr of bin-averages]. The last on only if cov is not None.'''
 
@@ -153,7 +175,41 @@ def bin_by_distance2(distances : np.ndarray, values : np.ndarray, cov : np.ndarr
             var = cov[il:ir, il:ir].sum() / (n*n)
             e_bins[i] = np.sqrt(var)
 
-    return (r_bins, v_bins) if cov is None else (r_bins, v_bins, e_bins)
+    return r_bins, v_bins, e_bins
+
+
+
+
+def bin_by_distance_ensemble(distances : np.ndarray, ensemble : np.ndarray, bin_size : float) -> tuple[np.ndarray, np.ndarray]:
+    '''For ensemble.shape=(..., distances), bins along the last axis.'''
+
+    bins = find_distance_bins(distances, bin_size)
+
+    ensemble_binned = np.empty(
+        shape = (*ensemble.shape[:-1], len(bins)),
+        dtype = float
+    )
+
+    for ibin, (il, ir) in enumerate(bins):
+        ensemble_binned[..., ibin] = np.mean(ensemble[..., il:ir], axis=-1)
+
+    return ensemble_binned
+
+
+
+
+# def bin_by_distance_cov(distances : np.ndarray, cov : np.ndarray, bin_size : float) -> np.ndarray:
+#     '''Computes covariance matrix of binned values.'''
+
+#     bins = find_distance_bins(distances, bin_size)
+
+#     cov_binned = np.empty(shape=(len(bins), len(bins)), dtype=float)
+
+#     for (i_bin, (i_left, i_right)), (j_bin, (j_left, j_right)) in product(enumerate(bins), repeat=2):
+#         cov_binned[i_bin, j_bin] = cov[i_left:i_right, j_left:j_right].sum() / (i_right - i_left) / (j_right - j_left)
+
+#     return cov_binned
+
 
 
 
