@@ -17,7 +17,7 @@ scratch_path = Path('/work/scratch/ln29bamu')
 
 
 def move_flowfiles(src_folder : Path, dst_folder : Path) -> None:
-    '''moves all files ending in .flow'''
+    '''copy all files ending in .flow'''
 
     for filename in os.listdir(src_folder):
         if filename.endswith(".flow"):
@@ -28,10 +28,11 @@ def move_flowfiles(src_folder : Path, dst_folder : Path) -> None:
             ) 
 
 
-src_folder = scratch_path / 'gauge_configs' / 'branch0cccc'
-dst_folder = code_path / 'zeugs' / 'outputs' / '16x64flows' / 'branch0cccc'
+for branch in range(6,10+1):
+    src_folder = scratch_path / 'gauge_configs' / f'branch{branch}'
+    dst_folder = scratch_path / 'flow_files' / f'branch{branch}'
 
-# move_flowfiles(src_folder, dst_folder)
+    # move_flowfiles(src_folder, dst_folder)
 
 
 
@@ -39,7 +40,7 @@ dst_folder = code_path / 'zeugs' / 'outputs' / '16x64flows' / 'branch0cccc'
 
 
 def append_files(base_folder : Path, new_folder : Path) -> None:
-    '''move all flow files from new into base, adding highest number from base to all new files'''
+    '''copy all flow files from new into base, adding highest number from base to all new files'''
 
     extract_nr = lambda fn: int(fn.removeprefix('pg_').removesuffix('.flow'))
     build_name = lambda nr: f'pg_{nr:08}.flow'
@@ -58,10 +59,11 @@ def append_files(base_folder : Path, new_folder : Path) -> None:
         )
 
 
-base_folder = code_path / 'zeugs' / 'outputs' / '16x64flows' / 'init'
-new_folder  = code_path / 'zeugs' / 'outputs' / '16x64flows' / 'branch0cccc'
+for branch in range(6,10+1):
+    base_folder = scratch_path / 'flow_files' / 'combined'
+    new_folder  = scratch_path / 'flow_files' / f'branch{branch}'
 
-# append_files(base_folder, new_folder)
+    # append_files(base_folder, new_folder)
 
 
 
