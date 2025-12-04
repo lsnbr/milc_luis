@@ -177,6 +177,22 @@ def radial_multiplcities_bins(ns : int, bin_size : float) -> np.ndarray:
 
 
 
+def slice_in_r(r_list : np.ndarray, v_list : np.ndarray, step : float) -> tuple[np.ndarray, np.ndarray]:
+    '''Slice v_list, but in terms of r instead of indices.'''
+
+    bins = find_distance_bins(r_list, step)
+    r_sliced = np.empty(shape=len(bins), dtype=r_list.dtype)
+    v_sliced = np.empty(shape=len(bins), dtype=v_list.dtype)
+
+    for i, (il, ir) in enumerate(bins):
+        r_sliced[i] = r_list[il]
+        v_sliced[i] = v_list[il]
+
+    return r_sliced, v_sliced
+
+
+
+
 
 def bin_by_distance(distances : np.ndarray, values : np.ndarray, cov : np.ndarray|None, bin_size : float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     '''Bin-averages values in bins of r-extent bin_size, computing standart deviations using the covariance matrix cov.

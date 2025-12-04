@@ -7,6 +7,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from flowing import flowtime_to_radius, radius_to_flowtime
 from measurements import *
 from statana import *
 
@@ -25,7 +26,13 @@ flowtimes = np.array([ 0.02572923590301565, 0.05303278154520656, 0.0810349522478
 
 def main():
 
-    fig, axes = plt.subplots(nrows=6, ncols=2, figsize=(15, 24))
+    # TODO
+    # bootstrap error analysis
+    # more thought about data/fit contribution to r-sum
+    # binsize depending on r, through preliminary fit showing how much G varies over r
+
+
+    fig, axes = plt.subplots(nrows=5, ncols=2, figsize=(14, 20))
 
 
     # getting data
@@ -36,51 +43,47 @@ def main():
     ense = get_data_binned(bin_size)
     dist = bin_distances(ns, bin_size)
 
-    iflow = 12
     tau = 5
+    iflowtimes = [6,7,8,9]
 
-    data = gv.dataset.avg_data(ense[:, iflow, tau, :].copy())
-
-
-    # plot of unbinned data
-    plot_dist(dist_raw, gv.dataset.avg_data(ense_raw[:, iflow, tau, :].copy()), axes[0,0])
+    dataset = ense[:, 6:10, tau, :].copy()
+    data = gv.dataset.avg_data(dataset)
 
 
-    # plot of correlator for all r
-    plot_dist(dist, data, axes[1,0])
-
-
-    # signal to noise threshold
-    sn_cut = 10
-    ir_cut = signal_to_noise_cut(data, sn_cut)
-    print(f'{sn_cut=}: i={ir_cut}, r={dist[ir_cut]}')
-
-
-    # do single fit
-    fit = single_fit(dist[ir_cut:], data[ir_cut:], 1)
-    print(fit)
-    plot_fit(dist, data, ir_cut, fit, axes[2,0])
+    # flowtime window
+    vis_flowtime_window(tau, axes[0,1])
 
 
     # r correlations
-    img = axes[3,0].imshow(gv.evalcorr(data), vmin=0, vmax=1)
-    fig.colorbar(img, ax=axes[3,0], label='Correlation')
+    ai = 2
+    vis_correlations_in_r(dist, data[ai], axes[ai,1], fig)
+    axes[2,1].set_title(f'Correlations in r (r_F={flowtime_to_radius(flowtimes[iflowtimes[ai]], nt)*nt:.2f}a, tau={tau})')
 
 
     # multiple flowtimes combined fit
-    datasetc = ense[:, 10:15:2, tau, :].copy()
+    sn_cut = 10
+
     do_svdcut = True
-    if do_svdcut: datac = do_svd_cut(datasetc, axes[3,1])
-    else:         datac = gv.dataset.avg_data(datasetc)    
-    fitc, ir_cuts = combined_fit(dist, datac, sn_cut, 1)
-    print(fitc)
-    plot_fitc(dist, datac, ir_cuts, fitc, axes[:3,1].flatten())
+    data_cut = do_svd_cut(dataset, axes[1,1])
+    if do_svdcut: data = data_cut
+
+    fit, ir_cuts = combined_fit(dist, data, sn_cut, 1)
+    print(fit)
+    plot_fitc(dist, data, ir_cuts, fit, tau, iflowtimes, axes[:,0].flatten())
 
 
     # do sum over r
-    print(radial_multiplicities_r(ns).sum(), radial_multiplcities_bins(ns, bin_size).sum())
-    print(radial_multiplicities_r(ns)[:20])
-    print(radial_multiplcities_bins(ns, bin_size)[:20])
+    rsums = []
+    for iifl, ifl in enumerate(iflowtimes):
+        data_raw = gv.dataset.avg_data(ense_raw[:, ifl, tau, :].copy())
+        ddist_raw = radial_multiplicities_r(ns)
+        res = sum_over_r(dist_raw, data_raw, ddist_raw, fit.p['a'][iifl], fit.p['m'], dist[ir_cuts[iifl]], axes[iifl,1] if iifl==3 else None)
+        if iifl==3: axes[iifl,1].set_title(f'partial sums up to r (r_F={flowtime_to_radius(flowtimes[ifl], nt)*nt:.2f}a, tau={tau})')
+        rsums.append(res)
+    
+
+    # plot G_F(tau)
+    plot_over_flowtime(tau, iflowtimes, rsums, axes[-1,1])
 
 
     # finalize figure
@@ -90,6 +93,98 @@ def main():
 
 
 
+
+
+
+def vis_correlations_in_r(dist : np.ndarray, data : np.ndarray, axes : plt.Axes, fig : plt.Figure) -> None:
+    '''visualize correlations in r'''
+
+    img = axes.imshow(gv.evalcorr(data), vmin=0, vmax=1)
+
+    tick_positions = np.arange(0, len(dist), len(dist)//5)
+    tick_labels    = [f'{dist[i]:.2f}' for i in tick_positions]
+
+    axes.set_xticks(tick_positions, tick_labels, rotation=45)
+    axes.set_yticks(tick_positions, tick_labels)
+
+    axes.set_title(f'radius correlations')
+    fig.colorbar(img, ax=axes, label='Correlation')
+
+
+
+
+def plot_over_flowtime(tau : int, iflowtimes : np.ndarray, corrs : np.ndarray, axes : plt.Axes) -> None:
+    '''...'''
+
+    axes.errorbar(
+        x    = [flowtimes[i] for i in iflowtimes],
+        y    = gv.mean(corrs),
+        yerr = gv.sdev(corrs),
+        marker     = 'o',
+        markersize = 2,
+        linestyle  = 'none',
+        linewidth  = 1,
+        label      = f'tau = {tau}'
+    )
+    axes.set_xlim(0, 0.5)
+    axes.set_ylim(-0.2, 0)
+    axes.set_xlabel('flowtime / a^2')
+    axes.set_ylabel('G_F(tau) / T^5')
+    axes.set_title(f'G_F(tau, r) summed over r, as a function of flowtime at fixed tau')
+    axes.legend()
+
+
+
+
+def vis_flowtime_window(tau : int, axes : plt.Axes) -> None:
+    '''...'''
+
+    flowtimes_norm = flowtime_to_radius(flowtimes, nt) * nt / tau
+    for ft in flowtimes_norm:
+        axes.axvline(x=ft, color='blue', linestyle='--')
+    axes.axvline(x=1/4, color='red', label='1/4', alpha=0.75)
+    axes.axvline(x=1/3, color='red', label='1/3', alpha=0.75)
+    axes.set_xlabel(f'r_F / a / tau  where  tau={tau}')
+    axes.set_title('Blue: all flowtimes, Red: flowtime window (3/2 < r_F/a < tau/3)')
+    axes.legend()
+
+
+
+
+def sum_over_r(dist : np.ndarray, data : np.ndarray, ddist : np.ndarray, a : list[gv.GVar], m : list[gv.GVar], r_cut : float, axes : plt.Axes|None) -> None:
+    '''do partial sums'''
+
+    ir_cut = min(i for i,r in enumerate(dist) if r >= r_cut)
+
+    partial_sums = np.empty_like(data)
+    for i, (r, v, dr) in enumerate(zip(dist, data, ddist)):
+        prev = 0 if i==0 else partial_sums[i-1]
+        if i < ir_cut:
+            partial_sums[i] = prev + v * dr
+        else:
+            partial_sums[i] = prev + expx_fcn(r, a, m) * dr
+    partial_sums /= nt
+
+    if axes is not None:
+        dist_sliced, psum_sliced = slice_in_r(dist, partial_sums, 1)
+        axes.errorbar(
+            x          = dist_sliced,
+            y          = gv.mean(psum_sliced),
+            yerr       = gv.sdev(psum_sliced),
+            marker     = 'o',
+            markersize = 2,
+            linestyle  = 'none',
+            linewidth  = 1,
+            label      = 'partial sums'
+        )
+        axes.axvline(x=dist[ir_cut], alpha=0.5, color='orange', label='sn_cut')
+
+        axes.set_xlabel('r / a')
+        axes.set_ylabel('psum / T^5')
+        axes.legend()
+
+    return partial_sums[-1]
+    
 
 
 
@@ -123,6 +218,7 @@ def do_svd_cut(dataset : np.ndarray, axes : plt.Axes|None = None) -> np.ndarray:
     print('svdcut =', svd.svdcut)
     if axes is not None:
         svd.plot_ratio(plot = GVarAxesAdapter(axes))
+        axes.set_title('SVD analysis of covariance matrix eigenvalues')
     return data_cut
 
 
@@ -223,22 +319,17 @@ def plot_fit(dist : np.ndarray, data : np.ndarray, i_cut : int, fit : lsqfit.non
 
     # the fit
     data_fit = fit.fcn(dist[il:ir], fit.p)
-    # axes.plot(
-    #     dist[il:ir],
-    #     data_fit,
-    #     label = 'fit'
-    # )
     axes.fill_between(
         x  = dist[il:ir],
         y1 = gv.mean(data_fit) - gv.sdev(data_fit),
         y2 = gv.mean(data_fit) + gv.sdev(data_fit),
         color = 'red',
         alpha = 0.75,
-        label = f'fit',
+        label = 'fit',
     )
 
     # vertical line at ir_cut
-    axes.axvline(x=dist[i_cut], alpha=0.5, color='orange', label='sn_cut')
+    axes.axvline(x=dist[i_cut], alpha=0.75, color='orange', label='s/n cut')
 
     # other stuff
     axes.set_xlabel('r / a')
@@ -248,13 +339,13 @@ def plot_fit(dist : np.ndarray, data : np.ndarray, i_cut : int, fit : lsqfit.non
 
 
 
-def plot_fitc(dist : np.ndarray, data : np.ndarray, i_cuts : list[int], fit : lsqfit.nonlinear_fit, axes : list[plt.Axes]) -> None:
+def plot_fitc(dist : np.ndarray, data : np.ndarray, i_cuts : list[int], fit : lsqfit.nonlinear_fit, tau : int, ifts : list[int], axes : list[plt.Axes]) -> None:
     '''....'''
 
-    il  = max(min(i_cuts)-0, 0)
+    il  = max(min(i_cuts), 0)
     ir = -1
 
-    for i, ax in enumerate(axes):
+    for i, (ax, ift) in enumerate(zip(axes, ifts)):
         ax.errorbar(
             x          = dist[il:ir],
             y          = gv.mean(data[i, il:ir]),
@@ -263,26 +354,21 @@ def plot_fitc(dist : np.ndarray, data : np.ndarray, i_cuts : list[int], fit : ls
             markersize = 2,
             linestyle  = 'none',
             linewidth  = 1,
-            label      = f'data {i}'
+            label      = 'data'
         )
         data_fit = expx_fcn(dist[il:ir], fit.p['a'][i], fit.p['m'])
-        # ax.plot(
-        #     dist[il:ir],
-        #     gv.mean(data_fit),
-        #     label = f'fit {i}',
-        #     color = 'red'
-        # )
         ax.fill_between(
             x  = dist[il:ir],
             y1 = gv.mean(data_fit) - gv.sdev(data_fit),
             y2 = gv.mean(data_fit) + gv.sdev(data_fit),
             color = 'red',
             alpha = 0.75,
-            label = f'fit {i}',
+            label = 'fit',
         )
-        ax.axvline(x=dist[i_cuts[i]], alpha=0.5, color='orange', label='sn_cut')
+        ax.axvline(x=dist[i_cuts[i]], alpha=0.75, color='orange', label='s/n cut')
         ax.set_ylabel('G / T^6')
         ax.set_ylim(-0.0004, 0.0002)
+        ax.set_title(f'Flowtime t_F={flowtimes[ift]:.2f}a^2 (r_F={flowtime_to_radius(flowtimes[ift], nt)*nt:.2f}a)  and  tau={tau}')
         ax.legend()
 
     axes[-1].set_xlabel('r / a')
