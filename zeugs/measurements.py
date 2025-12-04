@@ -87,7 +87,7 @@ def extract_flowtimes(flow_measurements : FlowMeasurements) -> list[float]:
 
 
 
-def radial_multiplicities(ns : int) -> np.ndarray:
+def radial_multiplicities_r2(ns : int) -> np.ndarray:
     '''result[s^2] is number of cells in a ns^3 lattice with distance s^2.'''
 
     s2_max = 3 * (ns//2)**2
@@ -102,11 +102,20 @@ def radial_multiplicities(ns : int) -> np.ndarray:
 
 
 
+def radial_multiplicities_r(ns : int) -> np.ndarray:
+    '''result[r] is number of cells in a ns^3 lattice with distance r^2. Only distances with dr>0 are present.'''
+
+    result = [dr for dr in radial_multiplicities_r2(ns) if dr > 0]
+    return np.array(result, dtype=int)
+
+
+
 
 def radial_separations(ns : int) -> np.ndarray:
     '''list of all reachable distances r on the lattice.'''
 
-    return np.array([r2**.5 for r2, count in enumerate(radial_multiplicities(ns)) if count > 0], dtype=float)
+    result = [r2**.5 for r2, count in enumerate(radial_multiplicities_r2(ns)) if count > 0]
+    return np.array(result, dtype=float)
 
 
 
@@ -153,6 +162,18 @@ def bin_distances(ns : int, bin_size : float) -> np.ndarray:
         find_distance_bins(distances, bin_size),
         distances
     )
+
+
+
+def radial_multiplcities_bins(ns : int, bin_size : float) -> np.ndarray:
+    '''Radial multiplicities summed for each bin.'''
+
+    dr_list = radial_multiplicities_r(ns)
+    bins    = find_distance_bins(radial_separations(ns), bin_size)
+    result  = np.empty(shape=len(bins), dtype=int)
+    for i, (il, ir) in enumerate(bins):
+        result[i] = dr_list[il:ir].sum()
+    return result
 
 
 
@@ -224,7 +245,7 @@ def make_distance_corr_arrays(radial_corrs : list, normalize : bool, ds_list : l
     ns = round(2 * (s2_max/3)**.5)
 
     if ds_list is None:
-        ds_list = radial_multiplicities(ns)
+        ds_list = radial_multiplicities_r2(ns)
     G_list = []
 
     for s2, ds in enumerate(ds_list):

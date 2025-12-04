@@ -29,6 +29,9 @@ def main():
 
 
     # getting data
+    ense_raw = get_data_unbinned()
+    dist_raw = radial_separations(ns)
+
     bin_size = 0.5
     ense = get_data_binned(bin_size)
     dist = bin_distances(ns, bin_size)
@@ -39,8 +42,12 @@ def main():
     data = gv.dataset.avg_data(ense[:, iflow, tau, :].copy())
 
 
+    # plot of unbinned data
+    plot_dist(dist_raw, gv.dataset.avg_data(ense_raw[:, iflow, tau, :].copy()), axes[0,0])
+
+
     # plot of correlator for all r
-    plot_dist(dist, data, axes[0,0])
+    plot_dist(dist, data, axes[1,0])
 
 
     # signal to noise threshold
@@ -50,21 +57,30 @@ def main():
 
 
     # do single fit
-    fit = single_fit(dist[ir_cut:], data[ir_cut:])
+    fit = single_fit(dist[ir_cut:], data[ir_cut:], 1)
     print(fit)
-    plot_fit(dist, data, ir_cut, fit, axes[1,0])
+    plot_fit(dist, data, ir_cut, fit, axes[2,0])
 
 
     # r correlations
-    img = axes[2,0].imshow(gv.evalcorr(data), vmin=0, vmax=1)
-    fig.colorbar(img, ax=axes[2,0], label='Correlation')
+    img = axes[3,0].imshow(gv.evalcorr(data), vmin=0, vmax=1)
+    fig.colorbar(img, ax=axes[3,0], label='Correlation')
 
 
     # multiple flowtimes combined fit
-    datac = gv.dataset.avg_data(ense[:, 10:17, tau, :].copy())
-    fitc, ir_cuts = combined_fit(dist, datac, sn_cut)
+    datasetc = ense[:, 10:15:2, tau, :].copy()
+    do_svdcut = True
+    if do_svdcut: datac = do_svd_cut(datasetc, axes[3,1])
+    else:         datac = gv.dataset.avg_data(datasetc)    
+    fitc, ir_cuts = combined_fit(dist, datac, sn_cut, 1)
     print(fitc)
-    plot_fitc(dist, datac, ir_cuts, fitc, axes[:,1].flatten())
+    plot_fitc(dist, datac, ir_cuts, fitc, axes[:3,1].flatten())
+
+
+    # do sum over r
+    print(radial_multiplicities_r(ns).sum(), radial_multiplcities_bins(ns, bin_size).sum())
+    print(radial_multiplicities_r(ns)[:20])
+    print(radial_multiplcities_bins(ns, bin_size)[:20])
 
 
     # finalize figure
@@ -78,26 +94,56 @@ def main():
 
 
 
+def get_data_unbinned() -> np.ndarray:
+    '''Get full dataset.'''
+
+    skip_configs = 55
+    return np.load(Path.cwd() / 'zeugs' / 'data' / 'data0.npy')[skip_configs::1]
+
+
 
 def get_data_binned(bin_size : float) -> np.ndarray:
+    '''Bin dataset in r.'''
+
     skip_configs = 55
     return bin_by_distance_ensemble(
         distances = radial_separations(ns),
-        ensemble  = np.load(Path.cwd() / 'zeugs' / 'data' / 'data0.npy')[skip_configs:],
+        ensemble  = np.load(Path.cwd() / 'zeugs' / 'data' / 'data0.npy')[skip_configs::1],
         bin_size  = bin_size
     )
 
 
 
 
-def single_fit(dist : np.ndarray, data : np.ndarray) -> lsqfit.nonlinear_fit:
+def do_svd_cut(dataset : np.ndarray, axes : plt.Axes|None = None) -> np.ndarray:
+    '''Make svd analysis, do svdcut, plot svd analysis.'''
+
+    svd = gv.dataset.svd_diagnosis(dataset.reshape(dataset.shape[0], -1), nbstrap=100)
+    data_cut = gv.svd(svd.avgdata, svdcut=svd.svdcut).reshape(*dataset.shape[1:])
+    print('svdcut =', svd.svdcut)
+    if axes is not None:
+        svd.plot_ratio(plot = GVarAxesAdapter(axes))
+    return data_cut
+
+
+
+
+def expx_fcn(x : float, a_vals : list[float], m_vals : list[float]) -> float:
+    '''Sum of len(a_vals) = len(m_vals) exponentials.'''
+
+    return sum( a * gv.exp(- m * x) / x
+                for a, m in zip(a_vals, m_vals, strict=True) )
+
+
+
+def single_fit(dist : np.ndarray, data : np.ndarray, n_exp : int = 1) -> lsqfit.nonlinear_fit:
     '''...'''
 
-    f = lambda x, p: p['a'] * gv.exp(- p['m'] * x) / x
+    f = lambda x, p: expx_fcn(x, p['a'], p['m'])
     fit = lsqfit.nonlinear_fit(
         data = (dist, data),
         fcn  = f,
-        p0   = {'a' : -1, 'm' : 1},
+        p0   = {'a' : np.full(n_exp, -1.), 'm' : np.linspace(1, n_exp, n_exp)},
         debug = True
     )
     return fit
@@ -105,16 +151,8 @@ def single_fit(dist : np.ndarray, data : np.ndarray) -> lsqfit.nonlinear_fit:
 
 
 
-def combined_fit(dist : np.ndarray, data : np.ndarray, sn_cut : float) -> tuple[lsqfit.nonlinear_fit, list[int]]:
+def combined_fit(dist : np.ndarray, data : np.ndarray, sn_cut : float, n_exp : int = 1) -> tuple[lsqfit.nonlinear_fit, list[int]]:
     '''...'''
-
-    # fit function
-    def f(x, p):
-        a_vals, m = p['a'], p['m']
-        y = {}
-        for i, a in enumerate(a_vals):
-            y[i] = a * gv.exp(-m * x) / x
-        return y
     
     # determine ir_cuts
     ir_cuts = [signal_to_noise_cut(data_i, sn_cut) for data_i in data]
@@ -125,11 +163,18 @@ def combined_fit(dist : np.ndarray, data : np.ndarray, sn_cut : float) -> tuple[
     for i, (data_i, ir_cut) in enumerate(zip(data, ir_cuts)):
         data_dict[i] = data_i[ir_cut:]
 
+    # fit function
+    def f(p):
+        y = {}
+        for i, (a_vals, ir_cut) in enumerate(zip(p['a'], ir_cuts)):
+            y[i] = expx_fcn(dist[ir_cut:], a_vals, p['m'])
+        return y
+
     # do fit
     fit = lsqfit.nonlinear_fit(
-        data = (dist, data_dict),
+        data = data_dict,
         fcn  = f,
-        p0   = {'a' : np.full(data.shape[0], -1, float), 'm' : 1},
+        p0   = {'a' : np.full((data.shape[0], n_exp), -1.), 'm' : np.linspace(1, n_exp, n_exp)},
         debug = True
     )
 
@@ -177,10 +222,19 @@ def plot_fit(dist : np.ndarray, data : np.ndarray, i_cut : int, fit : lsqfit.non
     )
 
     # the fit
-    axes.plot(
-        dist[il:ir],
-        fit.fcn(dist[il:ir], fit.pmean),
-        label = 'fit'
+    data_fit = fit.fcn(dist[il:ir], fit.p)
+    # axes.plot(
+    #     dist[il:ir],
+    #     data_fit,
+    #     label = 'fit'
+    # )
+    axes.fill_between(
+        x  = dist[il:ir],
+        y1 = gv.mean(data_fit) - gv.sdev(data_fit),
+        y2 = gv.mean(data_fit) + gv.sdev(data_fit),
+        color = 'red',
+        alpha = 0.75,
+        label = f'fit',
     )
 
     # vertical line at ir_cut
@@ -197,7 +251,7 @@ def plot_fit(dist : np.ndarray, data : np.ndarray, i_cut : int, fit : lsqfit.non
 def plot_fitc(dist : np.ndarray, data : np.ndarray, i_cuts : list[int], fit : lsqfit.nonlinear_fit, axes : list[plt.Axes]) -> None:
     '''....'''
 
-    il  = max(min(i_cuts)-3, 0)
+    il  = max(min(i_cuts)-0, 0)
     ir = -1
 
     for i, ax in enumerate(axes):
@@ -211,21 +265,29 @@ def plot_fitc(dist : np.ndarray, data : np.ndarray, i_cuts : list[int], fit : ls
             linewidth  = 1,
             label      = f'data {i}'
         )
-        ax.plot(
-            dist[il:ir],
-            fit.pmean['a'][i] * gv.exp(- fit.pmean['m'] * dist[il:ir]) / dist[il:ir],
-            # fit.fcn(dist[il:ir], fit.pmean)[i],
-            label = f'fit {i}'
+        data_fit = expx_fcn(dist[il:ir], fit.p['a'][i], fit.p['m'])
+        # ax.plot(
+        #     dist[il:ir],
+        #     gv.mean(data_fit),
+        #     label = f'fit {i}',
+        #     color = 'red'
+        # )
+        ax.fill_between(
+            x  = dist[il:ir],
+            y1 = gv.mean(data_fit) - gv.sdev(data_fit),
+            y2 = gv.mean(data_fit) + gv.sdev(data_fit),
+            color = 'red',
+            alpha = 0.75,
+            label = f'fit {i}',
         )
         ax.axvline(x=dist[i_cuts[i]], alpha=0.5, color='orange', label='sn_cut')
         ax.set_ylabel('G / T^6')
+        ax.set_ylim(-0.0004, 0.0002)
         ax.legend()
 
     axes[-1].set_xlabel('r / a')
 
     
-
-
 
 
 
@@ -242,44 +304,22 @@ def signal_to_noise_cut(data : np.ndarray, sn_cut : float) -> int|None:
 
 
 
+class GVarAxesAdapter:
+    '''Adapter to make plt.Axes behave like gvar's expected plot object.'''
 
+    def __init__(self, ax):
+        self._ax = ax
 
-
-
-# print('loading data...')
-# code_path = Path.cwd()
-# skip_configs = 50
-# corrs_ensemble = np.load(code_path / 'zeugs' / 'data' / 'data0.npy')[skip_configs:]
-# print(corrs_ensemble.shape, corrs_ensemble.dtype)
-
-# print('bin in r...')
-
-
-# print('doing stuff')
-# d = gvar.dataset.avg_data(corrs_ensemble[:, :, 5, 10])
-# img = axes[0,1].imshow(gvar.evalcorr(d), vmin=0, vmax=1)
-# fig.colorbar(img, ax=axes[0,1], label='Correlation')
-
-
-# print('big ensemble')
-# db = gvar.dataset.avg_data(corrs_ensemble[:, :, :, :10].copy())
-# print(db.shape)
-# print(gvar.evalcorr(db).shape)
-
-# img = axes[1,1].imshow(gvar.evalcorr(db)[:,5,:,5], vmin=0, vmax=1)
-# fig.colorbar(img, ax=axes[1,1], label='Correlation')
+    def __getattr__(self, name):
+        if name in ('xlabel', 'ylabel', 'title', 'xscale'):
+            return getattr(self._ax, f'set_{name}')
+        return getattr(self._ax, name)
 
 
 
 
 
 
-
-# TODO
-#
-# bin in r, incorporating covariances
-#
-# plot to exponential, checking chi2 and Q
 
 
 
