@@ -1,4 +1,4 @@
-grid_tau6.png
+grid_tau6_bin05.png
 -------------------------------------
 
 svdcut = 0.00368877604587096
@@ -19,7 +19,7 @@ Settings:
 
 
 
-grid_tau6_svd.png
+grid_tau6_bin05_svd.png
 -------------------------------------
 
 svdcut = 0.0037978242766303423
@@ -40,7 +40,7 @@ Settings:
 
 
 
-grid_tau5.png
+grid_tau5_bin05.png
 -------------------------------------
 
 svdcut = 8.353320995979204e-05
@@ -60,7 +60,7 @@ Settings:
 
 
 
-grid_tau5_svd.png
+grid_tau5_bin05_svd.png
 -------------------------------------
 
 svdcut = 8.353320995979204e-05
@@ -76,4 +76,24 @@ Parameters:
 
 Settings:
   svdcut/n = 1e-12/0    tol = (1e-08,1e-10,1e-10*)    (itns/time = 20/0.9s)
+  fitter = scipy_least_squares    method = trf
+
+
+
+grid_tau5_bin1.png
+-------------------------------------
+
+svdcut = 1.4084723718830088e-07
+Least Squares Fit (no prior):
+  chi2/dof [dof] = 1 [196]    Q = 0.33
+
+Parameters:
+          a 0,0   -0.057 (12)     [   -1 ± inf ]  
+            1,0   -0.061 (12)     [   -1 ± inf ]  
+            2,0   -0.065 (12)     [   -1 ± inf ]  
+            3,0   -0.067 (13)     [   -1 ± inf ]  
+            m 0    0.458 (29)     [    1 ± inf ]  
+
+Settings:
+  svdcut/n = 1e-12/0    tol = (1e-08,1e-10,1e-10*)    (itns/time = 20/0.3s)
   fitter = scipy_least_squares    method = trf

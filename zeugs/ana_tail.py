@@ -1,4 +1,6 @@
 from pathlib import Path
+from dataclasses import dataclass
+from typing import Callable
 import numpy as np
 import gvar as gv
 import lsqfit
@@ -39,7 +41,7 @@ def main():
     ense_raw = get_data_unbinned()
     dist_raw = radial_separations(ns)
 
-    bin_size = 0.5
+    bin_size = 0.9
     ense = get_data_binned(bin_size)
     dist = bin_distances(ns, bin_size)
 
@@ -63,7 +65,7 @@ def main():
     # multiple flowtimes combined fit
     sn_cut = 10
 
-    do_svdcut = True
+    do_svdcut = False
     data_cut = do_svd_cut(dataset, axes[1,1])
     if do_svdcut: data = data_cut
 
@@ -86,12 +88,50 @@ def main():
     plot_over_flowtime(tau, iflowtimes, rsums, axes[-1,1])
 
 
+    # test binning dependent on function
+    bins = vis_fcn_binning(dist_raw, gv.dataset.avg_data(ense_raw[:, iflowtimes[0], tau, :].copy()), lambda r: r**(-6), 0.01, axes[-1,0])
+    print('number of bins =', len(bins))
+
+
     # finalize figure
     plt.tight_layout()
     plt.savefig(Path.cwd() / 'zeugs' / 'plots' / 'grid.png', dpi=600)
 
 
 
+
+
+
+@dataclass
+class TailFitData:
+
+    r_cuts : np.ndarray             # float for each r-series    
+    fit    : lsqfit.nonlinear_fit   # fit object of combined fit
+    psums  : np.ndarray             # partial sums (array of float) for each r-series
+    result : float                  # G_F(tau) = sum over r  for each r-series
+
+
+
+
+def do_tail_fit_and_sum(dist : np.ndarray, data : np.ndarray, labels = np.ndarray) -> TailFitData:
+    '''dist:   list of r-separations
+       data:   sample of shape=(config, ..., value)
+       labels: labels for r-series (...-part of data)'''
+
+
+
+
+def vis_fcn_binning(dist : np.ndarray, data : np.ndarray, fcn : Callable[[float], float], tol : float, axes : plt.Axes) -> list[tuple[int, int]]:
+    '''...'''
+
+    bins = bin_in_r_through_fcn(dist, fcn, tol)
+
+    plot_dist(dist, data, axes)
+
+    for il, ir in bins:
+        axes.axvline(x=dist[il], color='orange', alpha=0.75)
+
+    return bins
 
 
 
@@ -366,12 +406,12 @@ def plot_fitc(dist : np.ndarray, data : np.ndarray, i_cuts : list[int], fit : ls
             label = 'fit',
         )
         ax.axvline(x=dist[i_cuts[i]], alpha=0.75, color='orange', label='s/n cut')
+        ax.set_xlabel('r / a')
         ax.set_ylabel('G / T^6')
-        ax.set_ylim(-0.0004, 0.0002)
+        ax.set_ylim(-0.0005, 0.0002)
         ax.set_title(f'Flowtime t_F={flowtimes[ift]:.2f}a^2 (r_F={flowtime_to_radius(flowtimes[ift], nt)*nt:.2f}a)  and  tau={tau}')
         ax.legend()
 
-    axes[-1].set_xlabel('r / a')
 
     
 

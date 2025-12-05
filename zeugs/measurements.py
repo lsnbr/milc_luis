@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import re
 from pathlib import Path
 from itertools import product
+from typing import Callable
 import numpy as np
 
 import matplotlib
@@ -140,6 +141,32 @@ def find_distance_bins(distances : np.ndarray, bin_size : float) -> list[tuple[i
         il = i
 
     return bins + [(il, len(distances))]
+
+
+
+
+def bin_in_r_through_fcn(dist : np.ndarray, fcn : Callable[[float], float], tol : float) -> list[tuple[int, int]]:
+    '''dist is 1d array of float, fcn takes a float to a float, tol is a fraction in [0,1].'''
+
+    bins    = []
+    i_left  = 0
+    i_start = 1
+
+    if dist[0] == 0:
+        bins.append((0,1))
+        i_left = 1
+        i_start += 1
+
+    for i in range(i_start, len(dist)+1):
+        rbin   = dist[i_left:i].mean()
+        Gbin   = fcn(dist[i_left:i]).mean()
+        relerr = abs((Gbin - fcn(rbin)) / fcn(rbin))
+        if relerr > tol:
+            bins.append((i_left, i-1))
+            i_left = i-1
+
+    bins.append((i_left, i+1))
+    return bins
 
 
 
