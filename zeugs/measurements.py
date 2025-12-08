@@ -41,6 +41,8 @@ class Measurements:
 
 FlowMeasurements = list[Measurements]
 
+Bins = list[tuple[int, int]]
+
 
 
 
@@ -121,7 +123,7 @@ def radial_separations(ns : int) -> np.ndarray:
 
 
 
-def find_distance_bins(distances : np.ndarray, bin_size : float) -> list[tuple[int, int]]:
+def find_distance_bins(distances : np.ndarray, bin_size : float) -> Bins:
     '''Finds indx pairs (il, ir) such that distances[il:ir] contain distances in a range of bin_size.
     Assumes distances is non-empty and monotonically rising.'''
 
@@ -145,8 +147,9 @@ def find_distance_bins(distances : np.ndarray, bin_size : float) -> list[tuple[i
 
 
 
-def bin_in_r_through_fcn(dist : np.ndarray, fcn : Callable[[float], float], tol : float) -> list[tuple[int, int]]:
-    '''dist is 1d array of float, fcn takes a float to a float, tol is a fraction in [0,1].'''
+def bin_in_r_through_fcn(dist : np.ndarray, fcn : Callable[[float], float], tol : float) -> Bins:
+    '''dist is 1d array of float, fcn takes a float to a float, tol is a fraction in [0,1].
+    Here, relerr is average value inside bin divided by value of middle of bin. (DIFFERENT to function incorporating data)'''
 
     bins    = []
     i_left  = 0
@@ -165,19 +168,61 @@ def bin_in_r_through_fcn(dist : np.ndarray, fcn : Callable[[float], float], tol 
             bins.append((i_left, i-1))
             i_left = i-1
 
-    bins.append((i_left, i+1))
+    bins.append((i_left, i))
     return bins
 
 
 
 
-def bin_averages(bins : list[tuple[int, int]], values : np.ndarray) -> np.ndarray:
-    '''Bin values and compute its averages.'''
+def bin_in_r_through_fcn_and_data(dist : np.ndarray, ense : np.ndarray, fcn : Callable[[float], float], reltol : float) -> Bins:
+    '''Finds bins such that  bin_error / data_error <= reltol.
+    Here, bin_error = |(mean of values at bin-points) - (val at mean-point of bin)|.
+    Ignores correlations, thus underestimates data errors if positive correlations.'''
 
-    values_binned = np.empty(shape=(len(bins),), dtype=float)
-    for ibin, (il, ir) in enumerate(bins):
-        values_binned[ibin] = values[il:ir].mean()
-    return values_binned
+    var = ense.var(axis=0, ddof=1) / ense.shape[0]      # standart deviation of the mean
+
+    bins    = []
+    i_left  = 0
+    i_start = 1
+
+    if dist[0] == 0:
+        bins.append((0,1))
+        i_left = 1
+        i_start += 1
+
+    for i in range(i_start, len(dist)+1):
+        rbin     = dist[i_left:i].mean()
+        bin_vals = fcn(dist[i_left:i])
+        bin_error  = abs(bin_vals.mean() - fcn(rbin))
+        # bin_error  = np.max(bin_vals) - np.min(bin_vals)          # alternative, more conservative definition of bin_error
+        data_error = np.sqrt(var[i_left:i].sum()) / (i - i_left)
+        if bin_error / data_error > reltol:
+            bins.append((i_left, i-1))
+            i_left = i-1
+
+    bins.append((i_left, i))
+    return bins
+
+
+
+
+
+def bin_averages(bins : Bins, *arrays : np.ndarray) -> tuple[np.ndarray]:
+    '''Bin values and compute its averages. If array has D>1, the last dimension is binned.'''
+
+    arrays_binned = []
+
+    for arr in arrays:
+        new_dtype = float if np.issubdtype(arr.dtype, np.integer) else arr.dtype
+        arr_binned = np.empty(shape=(*arr.shape[:-1], len(bins)), dtype=new_dtype)
+
+        for ibin, (il, ir) in enumerate(bins):
+            arr_binned[..., ibin] = arr[..., il:ir].mean(axis=-1)
+
+        arrays_binned.append(arr_binned)
+
+    return tuple(arrays_binned)
+
 
 
 
@@ -188,7 +233,7 @@ def bin_distances(ns : int, bin_size : float) -> np.ndarray:
     return bin_averages(
         find_distance_bins(distances, bin_size),
         distances
-    )
+    )[0]
 
 
 
@@ -244,7 +289,7 @@ def bin_by_distance(distances : np.ndarray, values : np.ndarray, cov : np.ndarra
 
 
 
-def bin_by_distance_ensemble(distances : np.ndarray, ensemble : np.ndarray, bin_size : float) -> tuple[np.ndarray, np.ndarray]:
+def bin_by_distance_ensemble(distances : np.ndarray, ensemble : np.ndarray, bin_size : float) -> np.ndarray:
     '''For ensemble.shape=(..., distances), bins along the last axis.'''
 
     bins = find_distance_bins(distances, bin_size)
@@ -258,21 +303,6 @@ def bin_by_distance_ensemble(distances : np.ndarray, ensemble : np.ndarray, bin_
         ensemble_binned[..., ibin] = np.mean(ensemble[..., il:ir], axis=-1)
 
     return ensemble_binned
-
-
-
-
-# def bin_by_distance_cov(distances : np.ndarray, cov : np.ndarray, bin_size : float) -> np.ndarray:
-#     '''Computes covariance matrix of binned values.'''
-
-#     bins = find_distance_bins(distances, bin_size)
-
-#     cov_binned = np.empty(shape=(len(bins), len(bins)), dtype=float)
-
-#     for (i_bin, (i_left, i_right)), (j_bin, (j_left, j_right)) in product(enumerate(bins), repeat=2):
-#         cov_binned[i_bin, j_bin] = cov[i_left:i_right, j_left:j_right].sum() / (i_right - i_left) / (j_right - j_left)
-
-#     return cov_binned
 
 
 

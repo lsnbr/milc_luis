@@ -1,6 +1,6 @@
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Any
 import numpy as np
 import gvar as gv
 import lsqfit
@@ -26,12 +26,11 @@ flowtimes = np.array([ 0.02572923590301565, 0.05303278154520656, 0.0810349522478
 
 
 
-def main():
+def main1():
 
     # TODO
     # bootstrap error analysis
     # more thought about data/fit contribution to r-sum
-    # binsize depending on r, through preliminary fit showing how much G varies over r
 
 
     fig, axes = plt.subplots(nrows=5, ncols=2, figsize=(14, 20))
@@ -85,12 +84,11 @@ def main():
     
 
     # plot G_F(tau)
-    plot_over_flowtime(tau, iflowtimes, rsums, axes[-1,1])
+    # plot_over_flowtime(tau, iflowtimes, rsums, axes[-1,1])
 
 
     # test binning dependent on function
-    bins = vis_fcn_binning(dist_raw, gv.dataset.avg_data(ense_raw[:, iflowtimes[0], tau, :].copy()), lambda r: r**(-6), 0.01, axes[-1,0])
-    print('number of bins =', len(bins))
+    _ = bin_data_through_fcn(dist_raw, ense_raw[:, iflowtimes[-1], tau, :].copy(), lambda r: r**(-6), 0.001, axes[-1, 0])
 
 
     # finalize figure
@@ -102,22 +100,234 @@ def main():
 
 
 
+def main2():
+
+    # getting distances and configuration data
+    dist = radial_separations(ns)
+    ense_all = get_data_unbinned()
+
+    # tau and flowtime indices
+    tau   = 5
+    i_fts = [6,7,8,9]
+
+    # ense and labels
+    ense = ense_all[:, i_fts, tau, :]
+    labels = np.array([f'tf={flowtimes[i]:.2f}a^2' for i in i_fts])
+
+    # run stuff
+    print('starting...')
+    result = do_tail_fit_and_sum(dist, ense, labels, 10)
+    print('r_cuts_sn      =', result.r_cuts_sn)
+    print('r_cuts_sum     =', result.r_cuts_sum)
+    print('number of bins =', len(result.bins))
+    print('total sums     =', result.rsums)
+    print(result.fit)
+
+    # plot stuff
+    nrows, ncols = len(i_fts), 2
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+    plot_tail_fit_and_sum(dist, ense, result, labels, axes)
+
+    # finalize figure
+    plt.tight_layout()
+    plt.savefig(Path.cwd() / 'zeugs' / 'plots' / 'grid2.png', dpi=600)
+
+
+
+
+main = main2
+
+
+
+
+
+
 @dataclass
 class TailFitData:
 
-    r_cuts : np.ndarray             # float for each r-series    
-    fit    : lsqfit.nonlinear_fit   # fit object of combined fit
-    psums  : np.ndarray             # partial sums (array of float) for each r-series
-    result : float                  # G_F(tau) = sum over r  for each r-series
+    bins       : Bins                   # bins determined through comparing to preliminary fit
+    r_cuts_sn  : np.ndarray             # float for each r-series, corresponding to minimum r used in fit    
+
+    fit        : lsqfit.nonlinear_fit   # fit object of combined fit
+
+    r_cuts_sum : np.ndarray             # float for each r-series, corresponding to r from when on fit instead of data is used in sum
+    psums      : np.ndarray             # partial sums (array of float) for each r-series (only for r integer)
+    rsums      : float                  # G_F(tau) = sum over r  for each r-series
 
 
 
 
-def do_tail_fit_and_sum(dist : np.ndarray, data : np.ndarray, labels = np.ndarray) -> TailFitData:
+def do_tail_fit_and_sum(dist : np.ndarray, ense : np.ndarray, labels : np.ndarray, sn_cut : float) -> TailFitData:
     '''dist:   list of r-separations
-       data:   sample of shape=(config, ..., value)
-       labels: labels for r-series (...-part of data)'''
+       ense:   data ensemble, ense.shape = (config, ..., distance)
+       labels: labels for r-series, labels.shape = ense.shape[1:-1]'''
+    
+    # some constants
+    reltol = 0.01       # bin_error / data_error <= reltol
+    n_exp  = 1          # number of exponentials in fit
+    a0, m0 = -1., 1.    # initial values for a and m in fit
+    
+    # evaluate bins for all r-series, then choose the finest
+    bins = None
+    for idx in np.ndindex(labels.shape):
+        new_bins = bin_data_through_fcn(dist, ense[:, *idx, :], lambda r: r**(-6), reltol)
+        if bins is None or len(new_bins) > len(bins):
+            bins = new_bins
 
+    # bin dist and ense according to bins and compute gvar array of ense (could do after ir_cuts_sn to reduce size of cov)
+    dist_binned, ense_binned = bin_averages(bins, dist, ense)
+    data_binned = gv.dataset.avg_data(ense_binned)
+
+    # find ir_cut (and corresponding distance r_cut) for all r-series
+    ir_cuts_sn = np.empty(shape=labels.shape, dtype=int)
+    r_cuts_sn  = np.empty(shape=ir_cuts_sn.shape, dtype=float)
+    for idx in np.ndindex(labels.shape):
+        ir_cut = signal_to_noise_cut(data_binned[idx], sn_cut)
+        if ir_cut is None:
+            raise Exception(f'Found no ir_cut for label={labels[idx]}.')
+        ir_cuts_sn[idx] = ir_cut
+        r_cuts_sn[idx]  = dist_binned[ir_cut]
+
+    # prepare data for fit (dict due to unequal ir_cuts_sn)
+    data_dict = {}
+    for idx, ir_cut in np.ndenumerate(ir_cuts_sn):
+        data_dict[idx] = data_binned[*idx, ir_cut:]
+
+    # the fit function
+    def f(p):
+        y = {}
+        for idx in np.ndindex(labels.shape):
+            y[idx] = expx_fcn(dist_binned[ir_cuts_sn[idx]:], p['a'][idx], p['m'])
+        return y
+
+    # do the fit
+    fit = lsqfit.nonlinear_fit(
+        data = data_dict,
+        fcn  = f,
+        p0   = { 'a' : np.full(shape = (*labels.shape, n_exp), fill_value = a0),
+                 'm' : np.linspace(m0, m0 * n_exp, n_exp)},
+        debug = True
+    )
+
+    # determine points from where on in the sum fit data is used instead of real data
+    ir_cuts_sum = np.empty(shape=labels.shape, dtype=int)
+    r_cuts_sum  = np.empty(shape=ir_cuts_sum.shape, dtype=float)
+    for idx in np.ndindex(ir_cuts_sum.shape):
+        ir_cut = index_from_distance(dist, r_cuts_sn[idx])    # for now
+        ir_cuts_sum[idx] = ir_cut
+        r_cuts_sum[idx]  = dist[ir_cut]
+
+    # do sums (partial and total)
+    data_mean = ense.mean(axis=0)
+    for idx, ir_cut in np.ndenumerate(ir_cuts_sum):
+        data_mean[idx][ir_cut:] = expx_fcn(dist[ir_cut:], fit.pmean['a'][idx], fit.pmean['m'])
+    data_mean *= radial_multiplicities_r(ns)
+    partial_sums = np.cumsum(data_mean, axis=-1) / nt   # divide by nt to go from T^6 to T^5 units
+    total_sums   = partial_sums[..., -1].copy()
+
+    # preparing the return value
+    return TailFitData(
+        bins,
+        r_cuts_sn,
+        fit,
+        r_cuts_sum,
+        partial_sums[..., [il for il, ir in find_distance_bins(dist, 1)]],
+        total_sums
+    )
+
+
+
+
+def plot_tail_fit_and_sum(dist : np.ndarray, ense : np.ndarray, result : TailFitData, labels : np.ndarray, axes : np.ndarray) -> None:
+    '''plot stuff'''
+
+    # prepare data
+    dist_b, ense_b = bin_averages(result.bins, dist, ense)
+    data_b = gv.dataset.avg_data(ense_b)
+
+    for i, idx in enumerate(np.ndindex(labels.shape)):
+
+        # plot the fit
+        ir_cut   = index_from_distance(dist, result.r_cuts_sn[idx])
+        ir_cut_b = index_from_distance(dist_b, result.r_cuts_sn[idx])
+        plot_dist   ( dist_b[ir_cut_b:],
+                      data_b[*idx, ir_cut_b:],
+                      axes[i, 0] )
+        plot_fitfcn ( dist[ir_cut:],
+                      expx_fcn(dist[ir_cut:], result.fit.p['a'][idx], result.fit.p['m']),
+                      axes[i, 0] )
+        axes[1, 0].set_title(labels[idx])
+
+        # plot the partial sum
+        ...
+
+
+
+
+
+def bin_data_through_fcn(dist : np.ndarray, ense : np.ndarray, fcn : Callable[[float], float], reltol : float, axes : plt.Axes|None = None) -> Bins:
+    '''Bin data according to function.'''
+
+    bins = bin_in_r_through_fcn_and_data(dist, ense, fcn, reltol)
+
+    if axes is not None:
+        cbin_size = 0.5
+        sn_cut = 8
+
+        dist_cbinned, ense_cbinned = bin_averages(find_distance_bins(dist, cbin_size), dist, ense)
+        data_cbinned = gv.dataset.avg_data(ense_cbinned)
+        ir_cut_c = signal_to_noise_cut(data_cbinned, sn_cut)
+        plot_dist(dist_cbinned[ir_cut_c:], data_cbinned[ir_cut_c:], axes, alpha=0.25, color='blue', label='const bins')
+
+        dist_vbinned, ense_vbinned = bin_averages(bins, dist, ense)
+        data_vbinned = gv.dataset.avg_data(ense_vbinned)
+        ir_cut_v = index_from_distance(dist_vbinned, dist_cbinned[ir_cut_c])
+        plot_dist(dist_vbinned[ir_cut_v:], data_vbinned[ir_cut_v:], axes, color='purple', label='var bins')
+
+        axes.set_title(f'Constant bins (Δr={cbin_size}a) and variable sized bins ({len(bins)} bins).')
+
+    return bins
+
+
+
+
+def bin_data_through_fit(dist : np.ndarray, ense : np.ndarray, axes : list[plt.Axes]|None = None) -> Bins:
+    '''Bin data with constant bin size, then do fit, then do new bins based such that bin_error is neglectable compared to data error.
+    If visualize, axes should be length >= 2.'''
+
+    # TODO
+    # if performance is a problem, maybe ignore correlation in preliminary fit
+
+    cbin_size = 1       # bin size for preliminary fit
+    sn_cut    = 10      # s/n cut for (constant bin size) binned data in preliminary fit
+    reltol    = 0.01    # binning_error / data_error < reltol
+
+    cbins = find_distance_bins(dist, cbin_size)
+    dist_cbinned, ense_cbinned = bin_averages(cbins, dist, ense)
+    data_cbinned = gv.dataset.avg_data(ense_cbinned)
+
+    ir_cut = signal_to_noise_cut(data_cbinned, sn_cut)
+    f = lambda x, p: expx_fcn(x, [p['a']], [p['m']])
+    fit = lsqfit.nonlinear_fit(
+        data = (dist_cbinned[ir_cut:], data_cbinned[ir_cut:]),
+        fcn  = f,
+        p0   = {'a' : -1, 'm' : 1}
+    )
+
+    vbins = bin_in_r_through_fcn_and_data(dist, ense, lambda r: f(r, fit.pmean), reltol)
+
+    if axes is not None:
+        plot_dist(dist_cbinned[ir_cut:], data_cbinned[ir_cut:], axes[0])
+        plot_fitfcn(dist_cbinned[ir_cut:], f(dist_cbinned[ir_cut:], fit.p), axes[0])
+        for il,_ in vbins:
+            axes[0].axvline(x=dist[il], color='orange', alpha=0.75)
+        axes[0].legend()
+        axes[0].set_title(f'Data and fit is based on constant Δr={cbin_size} bins, vertical lines are bins based on fit.')
+        axes[1].axis('off')
+        axes[1].text(0, 1, f'{fit}\n\nnumber of bins = {len(vbins)}', family="monospace", va="top")
+
+    return vbins
+    
 
 
 
@@ -125,12 +335,9 @@ def vis_fcn_binning(dist : np.ndarray, data : np.ndarray, fcn : Callable[[float]
     '''...'''
 
     bins = bin_in_r_through_fcn(dist, fcn, tol)
-
     plot_dist(dist, data, axes)
-
     for il, ir in bins:
         axes.axvline(x=dist[il], color='orange', alpha=0.75)
-
     return bins
 
 
@@ -233,7 +440,7 @@ def get_data_unbinned() -> np.ndarray:
     '''Get full dataset.'''
 
     skip_configs = 55
-    return np.load(Path.cwd() / 'zeugs' / 'data' / 'data0.npy')[skip_configs::1]
+    return np.load(Path.cwd() / 'zeugs' / 'data' / 'data0.npy')[skip_configs:]
 
 
 
@@ -319,22 +526,41 @@ def combined_fit(dist : np.ndarray, data : np.ndarray, sn_cut : float, n_exp : i
 
 
 
-def plot_dist(dist : np.ndarray, data : np.ndarray, axes : plt.Axes) -> None:
+def plot_dist(dist : np.ndarray, data : np.ndarray, axes : plt.Axes, **plt_args : Any) -> None:
     '''plot G over r'''
+
+    if plt_args is None: plt_args = {}
+    plt_default = { 'marker'     : 'o',
+                    'markersize' : 2,
+                    'linestyle'  : 'none',
+                    'linewidth'  : 1,
+                    'label'      : 'data' }
+    for kw, val in plt_default.items():
+        if kw not in plt_args: plt_args[kw] = val
 
     axes.errorbar(
         x          = dist,
         y          = gv.mean(data),
         yerr       = gv.sdev(data),
-        marker     = 'o',
-        markersize = 2,
-        linestyle  = 'none',
-        linewidth  = 1,
-        label      = 'data'
+        **plt_args
     )
     axes.set_xlabel('r / a')
     axes.set_ylabel('G / T^6')
     axes.legend()
+
+
+
+def plot_fitfcn(dist : np.ndarray, data : np.ndarray, axes : plt.Axes) -> None:
+    '''plot function with error bands'''
+
+    axes.fill_between(
+        x  = dist,
+        y1 = gv.mean(data) - gv.sdev(data),
+        y2 = gv.mean(data) + gv.sdev(data),
+        color = 'red',
+        alpha = 0.5,
+        label = 'fit',
+    )
 
 
 
@@ -426,6 +652,16 @@ def signal_to_noise_cut(data : np.ndarray, sn_cut : float) -> int|None:
         if   i_cand is None     and sn <  sn_cut: i_cand = ir
         elif i_cand is not None and sn >= sn_cut: i_cand = None
     return i_cand
+
+
+
+def index_from_distance(dist : np.ndarray, r_cut : float) -> int:
+    '''Smallest i such that  dist[j] > r_cut  for all  j > i. 0 if none exists.'''
+
+    for i, r in enumerate(dist):
+        if r > r_cut: return max(0, i-1)
+
+    return i
 
 
 
