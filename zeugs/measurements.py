@@ -176,14 +176,14 @@ def bin_in_r_through_fcn(dist : np.ndarray, fcn : Callable[[float], float], tol 
 
 def bin_in_r_through_fcn_and_data(dist : np.ndarray, ense : np.ndarray, fcn : Callable[[float], float], reltol : float) -> Bins:
     '''Finds bins such that  bin_error / data_error <= reltol.
-    Here, bin_error = |(mean of values at bin-points) - (val at mean-point of bin)|.
-    Ignores correlations, thus underestimates data errors if positive correlations.'''
+    Here, bin_error = |(mean of values at bin-points) - (val at mean-point of bin)|.'''
 
-    var = ense.var(axis=0, ddof=1) / ense.shape[0]      # standart deviation of the mean
+    cov = np.cov(ense, rowvar=False) / ense.shape[0]      # covariances of the means
 
     bins    = []
     i_left  = 0
     i_start = 1
+    cov_sum = 0
 
     if dist[0] == 0:
         bins.append((0,1))
@@ -191,14 +191,19 @@ def bin_in_r_through_fcn_and_data(dist : np.ndarray, ense : np.ndarray, fcn : Ca
         i_start += 1
 
     for i in range(i_start, len(dist)+1):
-        rbin     = dist[i_left:i].mean()
-        bin_vals = fcn(dist[i_left:i])
-        bin_error  = abs(bin_vals.mean() - fcn(rbin))
+
+        rbin      = dist[i_left:i].mean()
+        bin_vals  = fcn(dist[i_left:i])
+        bin_error = abs(bin_vals.mean() - fcn(rbin))
         # bin_error  = np.max(bin_vals) - np.min(bin_vals)          # alternative, more conservative definition of bin_error
-        data_error = np.sqrt(var[i_left:i].sum()) / (i - i_left)
+
+        cov_sum += cov[i_left:i, i-1].sum() + cov[i-1, i_left:i-1].sum()
+        data_error = np.sqrt(cov_sum) / (i - i_left)
+
         if bin_error / data_error > reltol:
             bins.append((i_left, i-1))
             i_left = i-1
+            cov_sum = 0
 
     bins.append((i_left, i))
     return bins

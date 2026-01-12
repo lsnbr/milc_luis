@@ -16,31 +16,33 @@ run_cmd = ['srun' if slurm else 'mpirun', '-n', str(ncores)]
 
 
 
-ns = 64
+ns = 36
 nt = 16
 
 T_Tc = 1.5      # just as info
 beta = 6.868    # depends on nt and T_Tc
 
 
-number_of_saved_configs = 200
-save_every_nth_config   = 100
+number_of_saved_configs = 5000
+save_every_nth_config   = 25
 
 
 
 
-# continue from last config of some branch
+
 
 branch = 0
 
-iseed = 2314 + 1_000_000*branch
+iseed = 2314 + 1_000_000*branch + 1_000_000_000*(0 if ns==64 else ns)      # third part with ns was not used for ns=64
 
 scratch_path    = Path('/work/scratch/ln29bamu')
-lattice_initial = scratch_path / 'gauge_configs' / f'branch{branch}ccc' / 'pg_00020000.lat'
-save_dir        = scratch_path / 'gauge_configs' / f'branch{branch}cccc'
 
 # lattice_initial = None
-# save_dir = Path('/home/luis/codeundso/milc_luis/zeugs') / 'gauge_configs'
+lattice_initial = scratch_path / 'gauge_configs_36' / f'init' / 'pg_00025000.lat'       # continue from last config of some branch
+
+save_dir        = scratch_path / 'gauge_configs_36' / f'branch{branch}'
+
+
 
 
 

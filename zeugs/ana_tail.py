@@ -1,5 +1,7 @@
 from pathlib import Path
-from dataclasses import dataclass
+import dataclasses
+from itertools import product
+import pickle
 from typing import Callable, Any
 import numpy as np
 import gvar as gv
@@ -22,7 +24,7 @@ ns = 64
 flowtimes = np.array([ 0.02572923590301565, 0.05303278154520656, 0.08103495224784385, 0.110208782326772,  0.141058391298962,  0.1736893835495303,
                        0.2086835114617738,  0.2454549361253429,  0.2838117228448263,  0.3249152519239425, 0.3705101434001126, 0.4179449298122797,
                        0.4696233239687699,  0.5279559816139976,  0.5890993819917063,  0.6570215111572449, 0.734680305158274,  0.8257738792221512,
-                       0.9353328035912798,  1.06959076807306,    1.233820281085228,   1.435936459574629 ], dtype=float)#, 1.68034447439404, 1.972161672512587 ]
+                       0.9353328035912798,  1.06959076807306,    1.233820281085228,   1.435936459574629 ], dtype=float)
 
 
 
@@ -95,11 +97,6 @@ def main1():
     plt.tight_layout()
     plt.savefig(Path.cwd() / 'zeugs' / 'plots' / 'grid.png', dpi=600)
 
-
-
-
-
-
 def main2():
 
     # getting distances and configuration data
@@ -107,26 +104,40 @@ def main2():
     ense_all = get_data_unbinned()
 
     # tau and flowtime indices
-    tau   = 5
-    i_fts = [6,7,8,9]
+    tau, i_fts = [ (5, [6,7,8,9]),
+                   (6, [9, 10, 11, 12]), ][0]
 
     # ense and labels
-    ense = ense_all[:, i_fts, tau, :]
-    labels = np.array([f'tf={flowtimes[i]:.2f}a^2' for i in i_fts])
+    ense = ense_all[:, i_fts, tau:tau+1, :]
+    labels = {}
+    for idx in np.ndindex(ense.shape[1:-1]):
+        labels[idx] = f'tf={flowtimes[idx[0]]:.2f}a^2, tau={idx[1]}a'
 
     # run stuff
     print('starting...')
-    result = do_tail_fit_and_sum(dist, ense, labels, 10)
-    print('r_cuts_sn      =', result.r_cuts_sn)
-    print('r_cuts_sum     =', result.r_cuts_sum)
-    print('number of bins =', len(result.bins))
-    print('total sums     =', result.rsums)
-    print(result.fit)
+    # result = do_tail_fit_and_sum(dist, ense, labels, 10)
+    results = do_tailfit_bootstrap(dist, ense, labels, 10)
+    res0 = do_tail_fit_and_sum(dist, ense, labels, 10)
+    print()
+    print('r_cuts_sn      =', res0.r_cuts_sn)
+    print('r_cuts_sum     =', res0.r_cuts_sum)
+    print('number of bins =', len(res0.bins.flatten()[0]))
+    print('total sums     =', res0.rsums)
+    print()
+    print(res0.bins)
+    print()
+    print(res0.fit)
+    print()
 
     # plot stuff
     nrows, ncols = len(i_fts), 2
     fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
-    plot_tail_fit_and_sum(dist, ense, result, labels, axes)
+    plot_tail_fits(dist, ense, res0, labels, axes[:, 0].flatten())
+    plot_tailfit_bootstrap(results, labels, axes[:, 1].flatten())
+
+    # save results
+    # with open('./zeugs/data/tailfits.pkl', 'wb') as f:
+    #     pickle.dump([dataclasses.replace(res, fit=None) for res in results], f)
 
     # finalize figure
     plt.tight_layout()
@@ -135,17 +146,463 @@ def main2():
 
 
 
-main = main2
+
+def main_windows():
+
+    nrows = 1
+    ncols = 1
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+    axes = np.reshape(axes, shape=(nrows, ncols))
+
+    tau = 7
+    # vis_flowtime_window(tau, axes[0,0])
+
+    vis_flowtime_windows(axes[0,0])
+
+    plt.tight_layout()
+    plt.savefig(Path.cwd() / 'zeugs' / 'plots' / 'flowtime_window.png', dpi=400)
 
 
 
 
 
 
-@dataclass
+def main_simfit():
+
+    # only narrow flowtime windows
+    windows_narrow = [
+        ( 5, [6,7,8,9] ),
+        ( 6, [9,10,11,12] ),
+        ( 7, [11,12,13,14,15] ),
+    ]
+    # many more flowtimes
+    windows_broad = [
+        ( 5, list(range(6, 14)) ),
+        ( 6, list(range(8, 15)) ),
+        ( 7, list(range(10, 16)) ),
+    ]
+    # include lots of data
+    windows_range = [
+        ( 0, [10,15] ),
+        ( 1, [10,15] ),
+        ( 2, [10,15] ),
+        ( 3, [10,15] ),
+        ( 4, [10,15] ),
+        ( 5, [10,15] ),
+        ( 6, [10,15] ),
+        ( 7, [   15] ),
+        ( 8, [   15] ),
+    ]
+    flowtime_windows = windows_range
+
+    # labels for each flowtime-tau combination
+    labels = {}
+    for tau, iflows in flowtime_windows:
+        for iflow in iflows:
+            rf = flowtime_to_radius(flowtimes[iflow], nt) * nt
+            labels[iflow, tau] = f'rf={rf:.2f}a, tau={tau}a'
+
+
+    # some parameters
+    reltol     = 0.025
+    sn_cut_fit = 10
+
+    ex_max     = 0
+    mats_max   = 1
+
+    sn_cut_sum = 3
+
+
+    # preparing unbinned data
+    dist     = radial_separations(ns)
+    ense_all = get_data_unbinned() * nt**2  # T^8 units
+
+
+
+    # fit fit fit
+    print()
+    fit, ense_binned, r_cuts = iterative_fit(
+        dist        = dist,
+        ense        = ense_all,
+        labels      = labels,
+        reltol      = reltol,
+        sn_cut      = sn_cut_fit,
+        ex_mats_seq = [(0,0), (0,1), (0,2)]#, (0,3), (0,4)]
+    )
+
+
+
+    # summing over r
+    # tsums, psums, r_cuts_sum = sums_over_r_hardcut(dist, ense_all, labels, fit, sn_cut_sum)
+    # print(tsums)
+    # print(psums[12, 6].shape, psums[12, 6].dtype)
+    # print(r_cuts_sum)
+
+
+
+    # do all the plotting of tails
+    synchro = True
+    nrows = len(set().union(*(set(iflows) for _,iflows in flowtime_windows))) if synchro else max(len(iflows) for _,iflows in flowtime_windows)
+    ncols = len(flowtime_windows)
+
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+    axes = np.reshape(axes, shape=(nrows, ncols))
+    
+    plot_flowtime_and_tau_fits(dist, labels, r_cuts, fit, synchro, axes)
+
+    fig.tight_layout()
+    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'simplot_prior.png', dpi=400)
+
+
+    # other plots
+    nrows2, ncols2 = 2, 1
+    fig2, axes2 = plt.subplots(nrows=nrows2, ncols=ncols2, figsize=(7*ncols2, 4*nrows2))
+    axes2 = np.reshape(axes2, shape=(nrows2, ncols2))
+
+    # plot_sums_over_r(tsums, axes2[0, 0], noerr=True)
+
+    plot_corr_eigenvals(ense_binned, axes2[1, 0])
+
+    fig2.tight_layout()
+    fig2.savefig(Path.cwd() / 'zeugs' / 'plots' / 'other_plots.png', dpi=400)
+
+
+
+
+
+
+main = main_simfit
+
+
+
+
+
+###############################################################################
+#########################  high level routines  ###############################
+###############################################################################
+
+
+
+def iterative_fit( dist   : np.ndarray, ense   : np.ndarray, labels : dict[Any, str],
+                   reltol : float,      sn_cut : float,
+                   ex_mats_seq : list[tuple[int, int]]
+                 ) -> tuple[lsqfit.nonlinear_fit, dict, dict]:
+    '''...'''
+
+    # preliminary binning using simple individual fits
+    bins0 = bin_multiple_series_through_fit(dist, ense, labels, reltol)
+
+    # some variables
+    p0 = None
+
+    # iteratively fit with increasing maximal excited states and matsubara modes
+    for i, (ex_max, mats_max) in enumerate(ex_mats_seq, start=1):
+
+        # bin data using previously determined bins
+        dist_binned, data_binned, _, _ = bin_cut_avg_data(dist, ense, bins0, sn_cut=sn_cut)
+
+        # do initial fit
+        fit0 = fit_flowtime_and_tau_tails_with_prior(dist_binned, data_binned, ex_max, mats_max, p0=p0)
+
+        # use fit to create more accurate bins, and bin data
+        bins = bin_through_simultaneous_fit(dist, ense, labels, fit0, reltol)
+        dist_binned, data_binned, ense_binned, r_cuts = bin_cut_avg_data(dist, ense, bins, sn_cut=sn_cut)
+
+        # do the actual fit
+        fit = fit_flowtime_and_tau_tails_with_prior(dist_binned, data_binned, ex_max, mats_max, p0=p0)
+
+        # print fit results
+        banner = f'XXXXXXXXXXXXXXXX  fit {i}: {ex_max=} and {mats_max=}  XXXXXXXXXXXXXXXX'
+        print('X' * len(banner))
+        print(banner)
+        print('X' * len(banner))
+        print(fit)
+
+        # set initial parameters and bins for next iteration
+        if fit.Q > 0.05:
+            p0    = fit.pmean
+            bins0 = bins
+
+    print()
+    return fit, ense_binned, r_cuts
+
+
+
+
+
+
+###############################################################################
+########################  simultaneous fitting  ###############################
+###############################################################################
+
+
+
+
+def fit_flowtime_and_tau_tails_with_prior(dist : dict[Any, np.ndarray], data : dict[Any, np.ndarray], excited_max : int, mats_max : int, p0 : dict|None = None, corr : bool = True) -> lsqfit.nonlinear_fit:
+    '''fit with priors'''
+
+    iflows = sorted(iflow for iflow, tau in data.keys())
+    prior  = make_prior(excited_max, mats_max, iflows)
+
+    def fitfcn(x, p):
+        y = {}
+        for idx in x.keys():
+            iflow, tau = idx
+            y[idx] = expx_ex_mats(x[idx], p, iflow, tau, excited_max, mats_max)
+        return y
+    
+    return (
+        lsqfit.nonlinear_fit( data =(dist, data), fcn=fitfcn, prior=prior, p0=p0 )
+        if corr else
+        lsqfit.nonlinear_fit( udata=(dist, data), fcn=fitfcn, prior=prior, p0=p0 )
+    )
+
+
+
+
+
+def make_prior(excited_max : int, mats_max : int, iflowtimes : list[int]) -> dict[Any, gv.GVar]:
+    '''constructs prior'''
+
+    if excited_max > 2:
+        raise Exception('Not yet implemented for excited_max > 2.')
+    
+    # gs and first 2 excited 0-+ glueball state masses (in units of 1/a) (in continuum R^3 SU(3))
+    masses_0p = [0.39, 0.55, 0.69]
+
+    # matsubara frequencies (in units of 1/a)
+    p_mats = lambda mats : mats * 2 * np.pi / nt
+
+    # rough estimate of higher matsubara mass
+    m_mats = lambda m, mats: np.sqrt( m**2 + p_mats(mats)**2 )
+
+    # now build prior
+    prior : dict[Any, gv.GVar] = {}
+    for n_ex, m_0p in enumerate(masses_0p[:excited_max+1]):
+        for mats in range(mats_max+1):
+
+            # mass (flowtime idependent)
+            m_guess = m_mats(m_0p, mats)
+            prior['m', n_ex, mats] = gv.gvar(m_guess, m_guess * 0.5)
+
+            # amplitudes (flowtime dependent)
+            for ift in iflowtimes:
+                prior['a', ift, n_ex, mats] = gv.gvar(-10, 100)
+
+    return prior
+
+
+
+
+
+def expx_ex_mats(x : float, p : dict, iflow : int, tau : int, ex_max : int, mats_max : int) -> float:
+    '''fit function with multiple excited states and matsubara modes'''
+
+    # n-th matsubara frequency = ω(n) = n 2pi T = n 2pi / (nt a) = (n 2pi / nt) (1/a)
+    ω = lambda mats : mats * 2 * np.pi / nt
+
+    res = 0
+
+    # sum over matsubara frequencies
+    for mats in range(mats_max+1):
+        res_n = 0
+
+        # sum over masses in n-th matsubara sector
+        for n_ex in range(ex_max+1):
+            res_n += expx( x, p['a', iflow, n_ex, mats], p['m', n_ex, mats] )
+
+        # weight by cos due to fourier transform
+        res += res_n * gv.cos(ω(mats)*tau)
+
+    return res
+
+
+
+
+
+
+
+def plot_flowtime_and_tau_fits(dist : np.ndarray, labels : dict[Any, str], r_cuts : dict[Any, float], fit : lsqfit.nonlinear_fit, synchro : bool, axes : np.ndarray) -> None:
+    '''plot all tails with data and fit, optionally synchro flowtimes across columns'''
+
+    # map (iflow, tau) onto indices of grid of plots
+    axes_idxs = {}
+    for i_tau, tau in enumerate(sorted({tau for _,tau in labels.keys()})):
+        for i_iflow, iflow in enumerate(sorted({iflow for iflow,tau0 in labels.keys() if synchro or tau0==tau})):
+            axes_idxs[iflow, tau] = (i_iflow, i_tau)
+
+    # plot original and fitted data
+    for idx in labels.keys():
+        iflow, tau = idx
+        ir_cut = index_from_distance(dist, r_cuts[idx])
+
+        y_fit = fit.fcn({idx : dist[ir_cut:]}, fit.p)[idx]
+
+        plot_dist(fit.x[idx], fit.y[idx], axes[axes_idxs[idx]])
+        plot_fitfcn(dist[ir_cut:], y_fit, axes[axes_idxs[idx]])
+
+        axes[axes_idxs[idx]].set_xlim(0, dist[-1]*2/3)
+        axes[axes_idxs[idx]].set_title(labels[idx])
+
+    
+
+
+
+
+
+###############################################################################
+###########################  summing over r  ##################################
+###############################################################################
+
+
+def sums_over_r_hardcut(dist : np.ndarray, ense : np.ndarray, labels : dict[Any, str], fit : lsqfit.nonlinear_fit, sn_cut : float) -> tuple[dict, dict, dict]:
+    '''Computes partial sums, where fit function is used instead of data starting at ir_cut. Returns total sums, partial sums, r_cuts.'''
+
+    dr_list  = radial_multiplicities_r(ns)
+
+    cbins    = find_distance_bins(dist, 1)
+    cbin_ils = [il for il,_ in cbins]
+
+    r_cuts = {}
+    psums  = {}
+    tsums  = {}
+
+    for idx in labels.keys():
+        iflow, tau = idx
+
+        # fit function for this idx
+        fitfcn = lambda x: fit.fcn({idx : x}, fit.pmean)[idx]
+
+        # find ir_cut, from where on s(fit)/n(data) < sn_cut
+        sfit_ndata  = gv.gvar(fitfcn(fit.x[idx]), gv.sdev(fit.y[idx]))
+        ir_cut_bin  = signal_to_noise_cut(sfit_ndata, sn_cut)
+        r_cuts[idx] = fit.x[idx][ir_cut_bin]
+        ir_cut      = index_from_distance(dist, r_cuts[idx])
+
+        # construct data out of original data and fit data
+        data_mixed = np.concatenate((
+            ense[:, iflow, tau, :ir_cut].mean(axis=0),
+            fitfcn(dist[ir_cut:])
+        ))
+
+        # multiply by radial multiplicities, then sum, then convert from T^8 to T^5 units
+        psums_fine = np.cumsum(data_mixed * dr_list, axis=0) / nt**3
+        
+        # take only partial sum after every r=a step, including last
+        psums[idx] = psums_fine[cbin_ils]
+
+        # total sum
+        tsums[idx] = psums_fine[-1]
+
+    return tsums, psums, r_cuts
+
+
+
+
+
+def plot_sums_over_r(tsums : dict, axes : plt.Axes, noerr : bool = True) -> None:
+    '''Plot all the G_t(tau) values for all t and tau.'''
+
+    tau_curves = {}
+    for (iflow, tau), tsum in tsums.items():
+        if tau in tau_curves: tau_curves[tau].append((iflow, tsum))
+        else:                 tau_curves[tau] = [(iflow, tsum)]
+
+    for tau, curve in tau_curves.items():
+        curve_sorted = sorted(curve, key=lambda v: v[0])
+        iflow_list = [iflow for iflow,_ in curve_sorted]
+        tsum_list  = [tsum  for _,tsum  in curve_sorted]
+
+        axes.errorbar(
+            x    = 8 * flowtimes[iflow_list] / tau**2,
+            y    = tsum_list if noerr else gv.mean(tsum_list),
+            yerr = None if noerr else gv.sdev(tsum_list),
+            marker = 'o',
+            label  = f'tau = {tau}a = {tau/nt:.2f}/T',
+        )
+
+    axes.axvline(x=(1/4)**2, color='red',    label='8t/tau^2 = (1/4)^2', alpha=0.75)
+    axes.axvline(x=(1/3)**2, color='purple', label='8t/tau^2 = (1/3)^2', alpha=0.75)
+
+    iflow_max = max(8 * flowtimes[iflow] / tau**2 for iflow,tau in tsums.keys())
+    tsum_max  = min(tsums.values())
+    axes.set_xlim(0, iflow_max * 1.1)
+    axes.set_ylim(tsum_max * 1.2, 0)
+
+    axes.set_xlabel('8 t / tau^2')
+    axes.set_ylabel('G_t(tau) / T^5')
+
+    axes.legend()
+    
+
+
+
+
+
+
+
+
+
+###############################################################################
+##############################  old stuff  ####################################
+###############################################################################
+
+
+
+
+
+def expx_mats(x : float, p : dict, iflow : int, tau : int, mats_max : int) -> float:
+    '''Fit function incorporating multiple matsubara modes but only lowest energy for each.'''
+
+    omega = lambda mats: 2 * np.pi * mats / nt
+
+    return sum( expx(x, p['a', iflow, mats], p['m', mats]) * gv.cos(omega(mats) * tau)
+                for mats in range(mats_max+1) )
+
+
+
+
+
+
+def fit_flowtime_and_tau_tails(dist : dict[Any, np.ndarray], data : dict[Any, np.ndarray], mats_max : int) -> lsqfit.nonlinear_fit:
+    '''Keys are (iflow, tau). Fit is to all tails simultaneous. Include matsubara modes up to mats_max. Only lowest mass for each matsubara mode.'''
+
+    iflows = { iflow for iflow, tau in data.keys() }
+    taus   = { tau   for iflow, tau in data.keys() }
+
+    omega = lambda mats: 2 * np.pi * mats / nt
+
+    p0 = {
+        **{ ('a', iflow, mats) : -1.
+            for iflow, mats in product(iflows, range(mats_max+1)) },     # one prefactor for each flowtime and matsubara mode
+        **{ ('m', mats) : 0.5 + omega(mats)
+            for mats in range(mats_max+1) }     # one mass for each matsubara mode
+    }
+
+    def fcn(x, p):
+        y = {}
+        for idx in x.keys():
+            iflow, tau = idx
+            y[idx] = expx_mats(x[idx], p, iflow, tau, mats_max)
+        return y
+    
+    return lsqfit.nonlinear_fit(
+        data = (dist, data),
+        fcn  = fcn,
+        p0   = p0,
+        debug = True
+    )
+
+
+
+
+
+
+
+@dataclasses.dataclass
 class TailFitData:
 
-    bins       : Bins                   # bins determined through comparing to preliminary fit
+    bins       : np.ndarray             # bins for each r-series
     r_cuts_sn  : np.ndarray             # float for each r-series, corresponding to minimum r used in fit    
 
     fit        : lsqfit.nonlinear_fit   # fit object of combined fit
@@ -157,70 +614,82 @@ class TailFitData:
 
 
 
+
+
+def do_tailfit_bootstrap(dist : np.ndarray, ense : np.ndarray, labels : np.ndarray, sn_cut : float) -> None:
+    '''...'''
+
+    results = []
+    n_bs = 10
+
+    for i, ense_bs in enumerate(gv.dataset.bootstrap_iter(ense, n_bs)):
+        result_bs = do_tail_fit_and_sum(dist, ense_bs, labels, sn_cut)
+        results.append(result_bs)
+        print(f'\rDone {i+1}/{n_bs} bootstraps...', end='', flush=True)
+
+    print()
+    return results
+
+
+
+
+def do_tail_fit_combined(dist : dict[Any, np.ndarray], data : dict[Any, np.ndarray], labels : dict[Any, str]) -> lsqfit.nonlinear_fit:
+    '''...'''
+
+    # some constants
+    n_exp  = 1          # number of exponentials in fit
+    a0, m0 = -1., 1.    # initial values for a and m in fit
+
+    # the fit function
+    def f(p):
+        y = {}
+        for idx in labels.keys():
+            y[idx] = expx_fcn(dist[idx], p['a', idx], p['m'])
+        return y
+    
+    # do the fit (debug = False faster..)
+    fit = lsqfit.nonlinear_fit(
+        data = data,
+        fcn  = f,
+        p0 = { **{('a', idx) : np.full(n_exp, a0) for idx in labels.keys()},
+               'm' : np.linspace(m0, m0 * n_exp, n_exp)},     # one m for all r-series for now
+        debug = True
+    )
+
+    return fit
+
+
+
+
 def do_tail_fit_and_sum(dist : np.ndarray, ense : np.ndarray, labels : np.ndarray, sn_cut : float) -> TailFitData:
     '''dist:   list of r-separations
        ense:   data ensemble, ense.shape = (config, ..., distance)
        labels: labels for r-series, labels.shape = ense.shape[1:-1]'''
     
     # some constants
-    reltol = 0.01       # bin_error / data_error <= reltol
-    n_exp  = 1          # number of exponentials in fit
-    a0, m0 = -1., 1.    # initial values for a and m in fit
+    reltol = 0.05       # bin_error / data_error <= reltol
     
-    # evaluate bins for all r-series, then choose the finest
-    bins = None
-    for idx in np.ndindex(labels.shape):
-        new_bins = bin_data_through_fcn(dist, ense[:, *idx, :], lambda r: r**(-6), reltol)
-        if bins is None or len(new_bins) > len(bins):
-            bins = new_bins
+    # variable size bins
+    bins = bin_multiple_series_through_fit(dist, ense, reltol)
 
-    # bin dist and ense according to bins and compute gvar array of ense (could do after ir_cuts_sn to reduce size of cov)
-    dist_binned, ense_binned = bin_averages(bins, dist, ense)
-    data_binned = gv.dataset.avg_data(ense_binned)
-
-    # find ir_cut (and corresponding distance r_cut) for all r-series
-    ir_cuts_sn = np.empty(shape=labels.shape, dtype=int)
-    r_cuts_sn  = np.empty(shape=ir_cuts_sn.shape, dtype=float)
-    for idx in np.ndindex(labels.shape):
-        ir_cut = signal_to_noise_cut(data_binned[idx], sn_cut)
-        if ir_cut is None:
-            raise Exception(f'Found no ir_cut for label={labels[idx]}.')
-        ir_cuts_sn[idx] = ir_cut
-        r_cuts_sn[idx]  = dist_binned[ir_cut]
-
-    # prepare data for fit (dict due to unequal ir_cuts_sn)
-    data_dict = {}
-    for idx, ir_cut in np.ndenumerate(ir_cuts_sn):
-        data_dict[idx] = data_binned[*idx, ir_cut:]
-
-    # the fit function
-    def f(p):
-        y = {}
-        for idx in np.ndindex(labels.shape):
-            y[idx] = expx_fcn(dist_binned[ir_cuts_sn[idx]:], p['a'][idx], p['m'])
-        return y
+    # get binned stuff, starting at sn_cut
+    dist_binned, data_binned, r_cuts_sn = bin_cut_avg_data(dist, ense, bins, sn_cut)
 
     # do the fit
-    fit = lsqfit.nonlinear_fit(
-        data = data_dict,
-        fcn  = f,
-        p0   = { 'a' : np.full(shape = (*labels.shape, n_exp), fill_value = a0),
-                 'm' : np.linspace(m0, m0 * n_exp, n_exp)},
-        debug = True
-    )
+    fit = do_tail_fit_combined(dist_binned, data_binned, labels)
 
     # determine points from where on in the sum fit data is used instead of real data
-    ir_cuts_sum = np.empty(shape=labels.shape, dtype=int)
-    r_cuts_sum  = np.empty(shape=ir_cuts_sum.shape, dtype=float)
-    for idx in np.ndindex(ir_cuts_sum.shape):
+    ir_cuts_sum = {}
+    r_cuts_sum  = {}
+    for idx in labels.keys():
         ir_cut = index_from_distance(dist, r_cuts_sn[idx])    # for now
         ir_cuts_sum[idx] = ir_cut
         r_cuts_sum[idx]  = dist[ir_cut]
 
     # do sums (partial and total)
     data_mean = ense.mean(axis=0)
-    for idx, ir_cut in np.ndenumerate(ir_cuts_sum):
-        data_mean[idx][ir_cut:] = expx_fcn(dist[ir_cut:], fit.pmean['a'][idx], fit.pmean['m'])
+    for idx, ir_cut in ir_cuts_sum.items():
+        data_mean[idx][ir_cut:] = expx_fcn(dist[ir_cut:], fit.pmean['a', idx], fit.pmean['m'])
     data_mean *= radial_multiplicities_r(ns)
     partial_sums = np.cumsum(data_mean, axis=-1) / nt   # divide by nt to go from T^6 to T^5 units
     total_sums   = partial_sums[..., -1].copy()
@@ -238,28 +707,127 @@ def do_tail_fit_and_sum(dist : np.ndarray, ense : np.ndarray, labels : np.ndarra
 
 
 
-def plot_tail_fit_and_sum(dist : np.ndarray, ense : np.ndarray, result : TailFitData, labels : np.ndarray, axes : np.ndarray) -> None:
-    '''plot stuff'''
+def plot_tailfit_bootstrap(results : list[TailFitData], labels : np.ndarray, axes : np.ndarray) -> None:
+    '''plot bs timelines'''
 
-    # prepare data
-    dist_b, ense_b = bin_averages(result.bins, dist, ense)
-    data_b = gv.dataset.avg_data(ense_b)
+    x = list(range(len(results)))
 
-    for i, idx in enumerate(np.ndindex(labels.shape)):
+    axes[0].scatter(
+        x = x,
+        y = [res.fit.Q for res in results],
+        s = 5,
+        label = 'Q'
+    )
+    axes[0].set_yscale('log')
+    axes[1].scatter(
+        x = x,
+        y = [res.fit.chi2 / res.fit.dof for res in results],
+        s = 5,
+        label = 'chi2/dof'
+    )
+    # axes[2].scatter(
+    #     x = x,
+    #     y = [len(res.bins) for res in results],
+    #     s = 5,
+    #     label = '#bins'
+    # )
+    axes[2].errorbar(
+        x    = x,
+        y    = [res.fit.p['m'][0].mean for res in results],
+        yerr = [res.fit.p['m'][0].sdev for res in results],
+        marker = 'o',
+        markersize = 5,
+        linestyle = 'none',
+        label = 'fitparam m'
+    )
+    for idx in labels.keys():
+        axes[3].scatter(
+            x = x,
+            y = [res.r_cuts_sn[idx] for res in results],
+            s = 5,
+            label = f'ir_cut ({labels[idx]})'
+        )
+
+    for i in range(4):
+        axes[i].set_xlabel('bootstrap sample')
+        axes[i].legend()
+
+
+
+
+def plot_tail_fits(dist : np.ndarray, ense : np.ndarray, result : TailFitData, labels : np.ndarray, axes : np.ndarray) -> None:
+    '''plot tail fits'''
+
+    r_mid = dist[index_from_distance(dist, dist[-1]/2)]
+
+    for i, idx in enumerate(labels.keys()):
+
+        # prepare data
+        dist_b, ense_b = bin_averages(result.bins[idx], dist, ense[:, *idx, :])
+        data_b = gv.dataset.avg_data(ense_b)
 
         # plot the fit
         ir_cut   = index_from_distance(dist, result.r_cuts_sn[idx])
         ir_cut_b = index_from_distance(dist_b, result.r_cuts_sn[idx])
-        plot_dist   ( dist_b[ir_cut_b:],
-                      data_b[*idx, ir_cut_b:],
-                      axes[i, 0] )
-        plot_fitfcn ( dist[ir_cut:],
-                      expx_fcn(dist[ir_cut:], result.fit.p['a'][idx], result.fit.p['m']),
-                      axes[i, 0] )
-        axes[1, 0].set_title(labels[idx])
+        plot_dist(
+            dist_b[ir_cut_b:],
+            data_b[ir_cut_b:],
+            axes[i]
+        )
+        plot_fitfcn(
+            dist[ir_cut:],
+            expx_fcn(dist[ir_cut:], result.fit.p['a', idx], result.fit.p['m']),
+            axes[i]
+        )
+        axes[i].set_xlim(0, r_mid)
+        axes[i].set_title(labels[idx])
+
+
+
+
+def plot_tail_fit_and_sum(dist : np.ndarray, ense : np.ndarray, result : TailFitData, labels : np.ndarray, axes : np.ndarray) -> None:
+    '''plot stuff'''
+
+    r_mid = dist[index_from_distance(dist, dist[-1]/2)]
+
+    for i, idx in enumerate(labels.keys()):
+
+        # prepare data
+        dist_b, ense_b = bin_averages(result.bins[idx], dist, ense[:, *idx, :])
+        data_b = gv.dataset.avg_data(ense_b)
+
+        # plot the fit
+        ir_cut   = index_from_distance(dist, result.r_cuts_sn[idx])
+        ir_cut_b = index_from_distance(dist_b, result.r_cuts_sn[idx])
+        plot_dist(
+            dist_b[ir_cut_b:],
+            data_b[ir_cut_b:],
+            axes[i, 0]
+        )
+        plot_fitfcn(
+            dist[ir_cut:],
+            expx_fcn(dist[ir_cut:], result.fit.p['a'][idx], result.fit.p['m']),
+            axes[i, 0]
+        )
+        axes[i, 0].set_xlim(0, r_mid)
+        axes[i, 0].set_title(labels[idx])
 
         # plot the partial sum
-        ...
+        r_ints = np.arange(0, result.psums.shape[-1], 1)
+        axes[i, 1].scatter(
+            x = r_ints,
+            y = result.psums[idx],
+            s = 5
+        )
+        axes[i, 1].set_xlabel('r / a')
+        axes[i, 1].set_ylabel('partial sum / T^5') 
+        axes[i, 1].set_title(labels[idx])       
+
+
+
+
+
+
 
 
 
@@ -289,45 +857,11 @@ def bin_data_through_fcn(dist : np.ndarray, ense : np.ndarray, fcn : Callable[[f
     return bins
 
 
-
-
-def bin_data_through_fit(dist : np.ndarray, ense : np.ndarray, axes : list[plt.Axes]|None = None) -> Bins:
-    '''Bin data with constant bin size, then do fit, then do new bins based such that bin_error is neglectable compared to data error.
-    If visualize, axes should be length >= 2.'''
-
-    # TODO
-    # if performance is a problem, maybe ignore correlation in preliminary fit
-
-    cbin_size = 1       # bin size for preliminary fit
-    sn_cut    = 10      # s/n cut for (constant bin size) binned data in preliminary fit
-    reltol    = 0.01    # binning_error / data_error < reltol
-
-    cbins = find_distance_bins(dist, cbin_size)
-    dist_cbinned, ense_cbinned = bin_averages(cbins, dist, ense)
-    data_cbinned = gv.dataset.avg_data(ense_cbinned)
-
-    ir_cut = signal_to_noise_cut(data_cbinned, sn_cut)
-    f = lambda x, p: expx_fcn(x, [p['a']], [p['m']])
-    fit = lsqfit.nonlinear_fit(
-        data = (dist_cbinned[ir_cut:], data_cbinned[ir_cut:]),
-        fcn  = f,
-        p0   = {'a' : -1, 'm' : 1}
-    )
-
-    vbins = bin_in_r_through_fcn_and_data(dist, ense, lambda r: f(r, fit.pmean), reltol)
-
-    if axes is not None:
-        plot_dist(dist_cbinned[ir_cut:], data_cbinned[ir_cut:], axes[0])
-        plot_fitfcn(dist_cbinned[ir_cut:], f(dist_cbinned[ir_cut:], fit.p), axes[0])
-        for il,_ in vbins:
-            axes[0].axvline(x=dist[il], color='orange', alpha=0.75)
-        axes[0].legend()
-        axes[0].set_title(f'Data and fit is based on constant Δr={cbin_size} bins, vertical lines are bins based on fit.')
-        axes[1].axis('off')
-        axes[1].text(0, 1, f'{fit}\n\nnumber of bins = {len(vbins)}', family="monospace", va="top")
-
-    return vbins
     
+
+
+
+
 
 
 
@@ -339,6 +873,7 @@ def vis_fcn_binning(dist : np.ndarray, data : np.ndarray, fcn : Callable[[float]
     for il, ir in bins:
         axes.axvline(x=dist[il], color='orange', alpha=0.75)
     return bins
+
 
 
 
@@ -356,6 +891,8 @@ def vis_correlations_in_r(dist : np.ndarray, data : np.ndarray, axes : plt.Axes,
 
     axes.set_title(f'radius correlations')
     fig.colorbar(img, ax=axes, label='Correlation')
+
+
 
 
 
@@ -383,6 +920,7 @@ def plot_over_flowtime(tau : int, iflowtimes : np.ndarray, corrs : np.ndarray, a
 
 
 
+
 def vis_flowtime_window(tau : int, axes : plt.Axes) -> None:
     '''...'''
 
@@ -394,6 +932,27 @@ def vis_flowtime_window(tau : int, axes : plt.Axes) -> None:
     axes.set_xlabel(f'r_F / a / tau  where  tau={tau}')
     axes.set_title('Blue: all flowtimes, Red: flowtime window (3/2 < r_F/a < tau/3)')
     axes.legend()
+
+
+
+
+def vis_flowtime_windows(axes : plt.Axes) -> None:
+    '''show all flowtimes plus min and max'''
+
+    flowtimes_rf = [flowtime_to_radius(ft, nt) * nt for ft in flowtimes]
+
+    for rf in flowtimes_rf:
+        axes.axvline(x=rf, color='blue', linestyle='--')
+
+    for tau in range(8+1):
+        axes.axvline(x=tau/3, color='red', alpha=0.75)
+
+    axes.axvline(x=1, color='violet')
+
+    axes.set_xlabel(f'flowtime_radius / a')
+    axes.set_title('violet: r=1, red: r=tau/2 for tau=0,...,8')
+    # axes.legend()
+
 
 
 
@@ -436,11 +995,6 @@ def sum_over_r(dist : np.ndarray, data : np.ndarray, ddist : np.ndarray, a : lis
 
 
 
-def get_data_unbinned() -> np.ndarray:
-    '''Get full dataset.'''
-
-    skip_configs = 55
-    return np.load(Path.cwd() / 'zeugs' / 'data' / 'data0.npy')[skip_configs:]
 
 
 
@@ -471,11 +1025,7 @@ def do_svd_cut(dataset : np.ndarray, axes : plt.Axes|None = None) -> np.ndarray:
 
 
 
-def expx_fcn(x : float, a_vals : list[float], m_vals : list[float]) -> float:
-    '''Sum of len(a_vals) = len(m_vals) exponentials.'''
 
-    return sum( a * gv.exp(- m * x) / x
-                for a, m in zip(a_vals, m_vals, strict=True) )
 
 
 
@@ -526,41 +1076,12 @@ def combined_fit(dist : np.ndarray, data : np.ndarray, sn_cut : float, n_exp : i
 
 
 
-def plot_dist(dist : np.ndarray, data : np.ndarray, axes : plt.Axes, **plt_args : Any) -> None:
-    '''plot G over r'''
-
-    if plt_args is None: plt_args = {}
-    plt_default = { 'marker'     : 'o',
-                    'markersize' : 2,
-                    'linestyle'  : 'none',
-                    'linewidth'  : 1,
-                    'label'      : 'data' }
-    for kw, val in plt_default.items():
-        if kw not in plt_args: plt_args[kw] = val
-
-    axes.errorbar(
-        x          = dist,
-        y          = gv.mean(data),
-        yerr       = gv.sdev(data),
-        **plt_args
-    )
-    axes.set_xlabel('r / a')
-    axes.set_ylabel('G / T^6')
-    axes.legend()
 
 
 
-def plot_fitfcn(dist : np.ndarray, data : np.ndarray, axes : plt.Axes) -> None:
-    '''plot function with error bands'''
 
-    axes.fill_between(
-        x  = dist,
-        y1 = gv.mean(data) - gv.sdev(data),
-        y2 = gv.mean(data) + gv.sdev(data),
-        color = 'red',
-        alpha = 0.5,
-        label = 'fit',
-    )
+
+
 
 
 
@@ -643,39 +1164,13 @@ def plot_fitc(dist : np.ndarray, data : np.ndarray, i_cuts : list[int], fit : ls
 
 
 
-def signal_to_noise_cut(data : np.ndarray, sn_cut : float) -> int|None:
-    '''Find index of r, such that s/n < sn_cut for all r' >= r. (None if no such index exists)'''
-
-    sn_data = np.abs(gv.mean(data) / gv.sdev(data))
-    i_cand = None
-    for ir, sn in enumerate(sn_data):
-        if   i_cand is None     and sn <  sn_cut: i_cand = ir
-        elif i_cand is not None and sn >= sn_cut: i_cand = None
-    return i_cand
-
-
-
-def index_from_distance(dist : np.ndarray, r_cut : float) -> int:
-    '''Smallest i such that  dist[j] > r_cut  for all  j > i. 0 if none exists.'''
-
-    for i, r in enumerate(dist):
-        if r > r_cut: return max(0, i-1)
-
-    return i
 
 
 
 
-class GVarAxesAdapter:
-    '''Adapter to make plt.Axes behave like gvar's expected plot object.'''
 
-    def __init__(self, ax):
-        self._ax = ax
 
-    def __getattr__(self, name):
-        if name in ('xlabel', 'ylabel', 'title', 'xscale'):
-            return getattr(self._ax, f'set_{name}')
-        return getattr(self._ax, name)
+
 
 
 

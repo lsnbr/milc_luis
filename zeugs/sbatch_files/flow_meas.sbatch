@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-#SBATCH -J flow_meas_branch10
+#SBATCH -J flow_meas_branch15
 #SBATCH --mail-type=END
 #SBATCH -e /work/scratch/ln29bamu/outputs/%x.err.%j
 #SBATCH -o /work/scratch/ln29bamu/outputs/%x.out.%j
@@ -24,7 +24,7 @@ source ~/myenv/bin/activate
 cd /home/ln29bamu/code/milc_luis/zeugs
 
 # Begin work (two arguments: first a str specifing which folder in scratch/gauge_configs, second an int specifzing the last gauge config)
-python do_flow_meas.py "branch10" 20000
+python do_flow_meas.py "branch15" 20000
 
 
 EXITCODE=$?

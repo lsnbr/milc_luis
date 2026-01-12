@@ -28,7 +28,7 @@ def move_flowfiles(src_folder : Path, dst_folder : Path) -> None:
             ) 
 
 
-for branch in range(6,10+1):
+for branch in range(11,15+1):
     src_folder = scratch_path / 'gauge_configs' / f'branch{branch}'
     dst_folder = scratch_path / 'flow_files' / f'branch{branch}'
 
@@ -59,7 +59,7 @@ def append_files(base_folder : Path, new_folder : Path) -> None:
         )
 
 
-for branch in range(6,10+1):
+for branch in range(11,15+1):
     base_folder = scratch_path / 'flow_files' / 'combined'
     new_folder  = scratch_path / 'flow_files' / f'branch{branch}'
 
@@ -97,3 +97,62 @@ base_folder  = scratch_path / 'gauge_configs' / 'branch'
 other_folder = scratch_path / 'gauge_configs' / 'branchc'
 
 # merge_gauge_file_folders(base_folder, other_folder)
+
+
+
+
+
+
+def remove_files_ending_in(folder : Path, ending : str) -> None:
+    '''removes all files in folder ending with specified string'''
+
+    files = [ f for f in folder.iterdir()
+              if f.is_file() and f.name.endswith(ending) ]
+    
+    if not files:
+        print(f"No files ending with '{ending}' found.")
+        return
+    
+    print(f"Found {len(files)} files ending with '{ending}':\n")
+    print('  '.join(f.name for f in files))
+
+    confirm = input("\nDelete these files? [y/N]: ").strip().lower()
+    if confirm != "y":
+        print("Aborted.")
+        return
+
+    for f in files:
+        f.unlink()
+
+    print(f"{len(files)} files deleted.")
+
+# remove_files_ending_in(scratch_path / 'gauge_configs' / 'branch11', '.flow')
+
+
+
+
+
+
+
+
+def trigger_write_access_files(folder : Path) -> None:
+    '''Writes to each files, then removes it again, such that the files are the same as before. Done to prevent automatic removal.'''
+
+    count = 0
+
+    for f in folder.rglob("*"):
+        if not f.is_file():
+            continue
+
+        with open(f, "r+b") as fh:
+            first_byte = fh.read(1)
+            fh.seek(0)
+            fh.write(first_byte)
+            fh.flush()
+
+        count += 1
+        print(f"\rTouched {count} files...", end="")
+
+    print("\nDone.")
+
+# trigger_write_access_files(scratch_path / 'outputs')
