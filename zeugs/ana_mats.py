@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from flowing import flowtime_to_radius, radius_to_flowtime
 from measurements import *
 from statana import *
+from ana_tail import make_prior_constr, expx_single_mats, plot_flowtime_and_tau_fits
 
 
 
@@ -20,72 +21,6 @@ flowtimes = np.array([ 0.02572923590301565, 0.05303278154520656, 0.0810349522478
                        0.2086835114617738,  0.2454549361253429,  0.2838117228448263,  0.3249152519239425, 0.3705101434001126, 0.4179449298122797,
                        0.4696233239687699,  0.5279559816139976,  0.5890993819917063,  0.6570215111572449, 0.734680305158274,  0.8257738792221512,
                        0.9353328035912798,  1.06959076807306,    1.233820281085228,   1.435936459574629 ], dtype=float)#, 1.68034447439404, 1.972161672512587 ]
-
-
-
-
-
-def main():
-
-    # plot stuff
-    nrows, ncols = 4, 1
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
-    axes = np.reshape(axes, shape=(nrows, ncols))
-
-    # fourier_and_save()
-
-    # preparing data
-    print('loading matsu data...')
-    ense_all = get_data_mats_unbinned()
-    print(ense_all.shape, ense_all.dtype)
-    dist = radial_separations(ns)
-
-    # bin with constant r bins
-    bins = find_distance_bins(dist, 0.5)
-    dist_binned, ense_all_binned = bin_averages(bins, dist, ense_all)
-    print(ense_all_binned.shape, ense_all_binned.dtype)
-
-    # matsubara modes data
-    iflow = 10
-
-    data_m0 = gv.dataset.avg_data(ense_all_binned[:, iflow, 0, :])
-    data_m1 = gv.dataset.avg_data(ense_all_binned[:, iflow, 1, :])
-    data_m2 = gv.dataset.avg_data(ense_all_binned[:, iflow, 2, :])
-
-
-    # modes times r sinh(w_n r)
-    data_m0b = data_m0 * dist_binned**2
-    data_m1b = data_m1 * dist_binned * np.sinh(mats_freq(1) * dist_binned) / mats_freq(1)
-    data_m2b = data_m2 * dist_binned * np.sinh(mats_freq(2) * dist_binned) / mats_freq(2)
-
-
-    # subtracted
-    data_sub = data_m0b + (1/3) * data_m1b + (-4/3) * data_m2b
-
-    plot_dist(dist_binned[:50], data_sub[:50], axes[3,0])
-    axes[3,0].set_ylim(-20, 20)
-
-
-    plot_dist(dist_binned[:50], data_m0b[:50], axes[0,0], label='mats n=0')
-    plot_dist(dist_binned[:50], data_m1b[:50], axes[0,0], label='mats n=1')
-    plot_dist(dist_binned[:50], data_m2b[:50], axes[0,0], label='mats n=2')
-    axes[0,0].set_ylim(-44, 44)
-
-    # smaller 
-    plot_dist(dist_binned[:50], data_m0b[:50], axes[1,0], label='mats n=0')
-    plot_dist(dist_binned[:50], data_m1b[:50], axes[1,0], label='mats n=1')
-    plot_dist(dist_binned[:50], data_m2b[:50], axes[1,0], label='mats n=2')
-    axes[1,0].set_ylim(-4, 0.7)
-
-    # even smaller 
-    plot_dist(dist_binned[:50], data_m0b[:50], axes[2,0], label='mats n=0')
-    plot_dist(dist_binned[:50], data_m1b[:50], axes[2,0], label='mats n=1')
-    plot_dist(dist_binned[:50], data_m2b[:50], axes[2,0], label='mats n=2')
-    axes[2,0].set_ylim(-1, 0.2)
-
-    # finalize figure
-    plt.tight_layout()
-    plt.savefig(Path.cwd() / 'zeugs' / 'plots' / 'gridmats.png', dpi=400)
 
 
 
@@ -179,12 +114,75 @@ def main2():
 
     # finalize and save plots
     fig.tight_layout()
-    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'gridmats2.png', dpi=400)
+    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'gridmats.png', dpi=400)
+
 
 
 
     # do fitting
+    print('do fits...')
+
+    mats_flowtimes = [
+        ( 0, [10, 15] ),
+        ( 1, [10, 15] ),
+        ( 2, [10, 15] ),
+    ]
+
+    labels = {}
+    for mats, iflows in mats_flowtimes:
+        for iflow in iflows:
+            rf = flowtime_to_radius(flowtimes[iflow], nt) * nt
+            labels[iflow, mats] = f'rf={rf:.2f}a, n={mats}'
+
+    dist_fit, data_fit, ense_fit, r_cuts_fit = bin_cut_avg_data(dist, ense_all, {idx : bins for idx in labels.keys()}, sn_cut=10)
+
+    fit0 = fit_flowtime_and_mats_tails_with_prior(dist_fit, data_fit, excited_max=0, mats_max=2)
+    print(fit0)
+
+    bins2 = bin_through_simultaneous_fit(dist, ense_all, labels, fit0, reltol=0.025, max_bin_size=10)
+    dist_fit, data_fit, ense_fit, r_cuts_fit = bin_cut_avg_data(dist, ense_all, bins2, sn_cut=10)
+
+    fit = fit_flowtime_and_mats_tails_with_prior(dist_fit, data_fit, excited_max=0, mats_max=2)
+    print(fit)
+
+
+    # plot fits
+    nrows, ncols = 2, 3
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+    axes = np.reshape(axes, shape=(nrows, ncols))
+
+    plot_flowtime_and_tau_fits(dist, labels, r_cuts_fit, fit, synchro=True, axes=axes)
+
+    fig.tight_layout()
+    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'gridmats_fits.png', dpi=400)
+
+
+
+
+
+
+
+
+
+
+def fit_flowtime_and_mats_tails_with_prior(dist : dict[Any, np.ndarray], data : dict[Any, np.ndarray], excited_max : int, mats_max : int, p0 : dict|None = None, corr : bool = True) -> lsqfit.nonlinear_fit:
+    '''fit with priors'''
+
+    iflows = sorted(iflow for iflow,_ in data.keys())
+    prior  = make_prior_constr(excited_max, mats_max, iflows)
+
+    def fitfcn(x, p):
+        y = {}
+        for idx in x.keys():
+            iflow, mats = idx
+            y[idx] = expx_single_mats(x[idx], p, iflow, mats, excited_max)
+        return y
     
+    return (
+        lsqfit.nonlinear_fit( data =(dist, data), fcn=fitfcn, prior=prior, p0=p0 )
+        if corr else
+        lsqfit.nonlinear_fit( udata=(dist, data), fcn=fitfcn, prior=prior, p0=p0 )
+    )
 
 
 

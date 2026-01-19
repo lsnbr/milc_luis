@@ -164,7 +164,8 @@ def bin_through_simultaneous_fit(dist : np.ndarray, ense : np.ndarray, labels : 
 
 
 def bin_cut_avg_data(
-        dist : np.ndarray, ense : np.ndarray, bins : dict[Any, Bins], sn_cut : float|None = None, r_min : float|None = None, r_cuts0 : dict[Any, float]|None = None
+        dist : np.ndarray, ense : np.ndarray, bins : dict[Any, Bins],
+        sn_cut : float|None = None, r_min : float|None = None, r_cuts0 : dict[Any, float]|None = None
     ) -> tuple[dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, float]]:
     '''1. Bin each r-series individually (no cross-correlation computations).
     1. Find ir_cut for each r-series based on sn_cut.
@@ -192,7 +193,7 @@ def bin_cut_avg_data(
             ir_cut = index_from_distance(dist_binned[idx], r_cuts0[idx])
 
         else:
-            raise Exception(f'Exactly one must be None: {sn_cut=}, {r_min=}.')
+            raise Exception(f'Exactly one must be None: {sn_cut=}, {r_min=}, {r_cuts0=}.')
 
         if ir_cut is None:
             raise Exception(f'Found no ir_cut for {idx=}.')

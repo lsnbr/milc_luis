@@ -360,7 +360,7 @@ def iterative_fit( dist   : np.ndarray, ense   : np.ndarray, labels       : dict
 def fit_flowtime_and_tau_tails_with_prior(dist : dict[Any, np.ndarray], data : dict[Any, np.ndarray], excited_max : int, mats_max : int, p0 : dict|None = None, corr : bool = True) -> lsqfit.nonlinear_fit:
     '''fit with priors'''
 
-    iflows = sorted(iflow for iflow, tau in data.keys())
+    iflows = sorted(iflow for iflow,_ in data.keys())
     prior  = make_prior_constr(excited_max, mats_max, iflows)
 
     def fitfcn(x, p):
@@ -382,11 +382,11 @@ def fit_flowtime_and_tau_tails_with_prior(dist : dict[Any, np.ndarray], data : d
 
 
 
-# ground state and first 2 excited 0-+ glueball state masses (in units of 1/a) (in continuum R^3 SU(3))
-masses_0p = [0.39, 0.55, 0.69]
+# ground state and first 2 excited 0-+ glueball state masses (in units of T) (in continuum R^3 SU(3))
+masses_0p = [6.24, 8.8, 11.04]
 
-# matsubara frequencies (in units of 1/a)
-p_mats = lambda mats : mats * 2 * np.pi / nt
+# matsubara frequencies (in units of T)
+p_mats = lambda mats : mats * 2 * np.pi
 
 # rough estimate of higher matsubara mass
 m_mats = lambda m, mats: np.sqrt( m**2 + p_mats(mats)**2 )
@@ -408,7 +408,7 @@ def make_prior(excited_max : int, mats_max : int, iflowtimes : list[int]) -> gv.
 
             # mass (flowtime idependent)
             m_guess = m_mats(m_0p, mats)
-            prior[f'm_{n_ex}_{mats}'] = gv.gvar(m_guess, m_guess * 0.5)
+            prior[f'm_{n_ex}_{mats}'] = gv.gvar(m_guess, m_guess * 0.95)
 
             # amplitudes (flowtime dependent)
             for ift in iflowtimes:
@@ -419,33 +419,45 @@ def make_prior(excited_max : int, mats_max : int, iflowtimes : list[int]) -> gv.
 
 
 
-def make_prior_constr(excited_max : int, mats_max : int, iflowtimes : list[int]) -> gv.BufferDict:
-    '''construct prior, incorporating constraints on masses'''
+
+def make_prior_mats_constr(mats : int, excited_max : int, iflowtimes : list[int]) -> gv.BufferDict:
+    '''constructs prior for single matsubara modes (constraining masses). todo: add e0 < e1 < ... constraint on excited energies'''
 
     if excited_max > 2:
         raise Exception('Not yet implemented for excited_max > 2.')
     
-    # add distributions to reparametrize masses to enforce constraints
-    for mats in range(mats_max+1):
-        if not gv.BufferDict.has_distribution(f'f_p{mats}'):
-            gv.BufferDict.add_distribution(
-                f'f_p{mats}',
-                lambda x: p_mats(mats) + gv.exp(x)
-            )
-    
+    # add distribution to reparametrize masses to enforce constraints
+    if not gv.BufferDict.has_distribution(f'f_p{mats}'):
+        gv.BufferDict.add_distribution(
+            f'f_p{mats}',
+            lambda x: p_mats(mats) + gv.exp(x)
+        )
+
     # now build prior
     prior = gv.BufferDict()
-
     for n_ex, m_0p in enumerate(masses_0p[:excited_max+1]):
-        for mats in range(mats_max+1):
-        
-            # mass (flowtime idependent), constrained to  m >= p_mats
-            m_guess = m_mats(m_0p, mats)
-            prior[f'f_p{mats}(m_{n_ex}_{mats})'] = gv.log(gv.gvar(m_guess, m_guess*0.95) - p_mats(mats))
 
-            # amplitudes (flowtime dependent)
-            for ift in iflowtimes:
-                prior[f'a_{ift}_{n_ex}_{mats}'] = gv.gvar(-1, 100)
+        # mass (flowtime idependent), constrained to  m >= p_mats
+        m_guess = m_mats(m_0p, mats)
+        prior[f'f_p{mats}(m_{n_ex}_{mats})'] = gv.log(gv.gvar(m_guess, m_guess*0.95) - p_mats(mats))
+
+        # amplitudes (flowtime dependent)
+        for ift in iflowtimes:
+            prior[f'a_{ift}_{n_ex}_{mats}'] = gv.gvar(-1, 100)
+
+    return prior
+
+
+
+
+
+def make_prior_constr(excited_max : int, mats_max : int, iflowtimes : list[int]) -> gv.BufferDict:
+    '''construct prior, incorporating constraints on masses'''
+
+    prior = gv.BufferDict()
+
+    for mats in range(mats_max+1):
+        prior.update(make_prior_mats_constr(mats, excited_max, iflowtimes))
 
     return prior
 
@@ -459,7 +471,7 @@ def expx_single_tau(x : float, p : dict, iflow : int, tau : int, ex_max : int, m
     '''fit function with multiple excited states and matsubara modes'''
 
     return sum(
-        gv.cos(p_mats(mats) * tau) * expx_single_mats(x, p, iflow, mats, ex_max)
+        2 * gv.cos(p_mats(mats) * tau/nt) * expx_single_mats(x, p, iflow, mats, ex_max)
         for mats in range(mats_max + 1)
     )
 
@@ -470,7 +482,11 @@ def expx_single_mats(x : float, p : dict, iflow : int, mats : int, ex_max : int)
     '''fit function for a single matsubara mode and possibly multiple excited states'''
 
     return sum(
-        expx( x, p[f'a_{iflow}_{n_ex}_{mats}'], p[f'm_{n_ex}_{mats}'] )
+        expx(
+            x / nt,
+            (nt/ns)**2 * p[f'm_{n_ex}_{mats}'] * p[f'a_{iflow}_{n_ex}_{mats}'],
+            p[f'm_{n_ex}_{mats}']
+        )
         for n_ex in range(ex_max + 1)
     )
 
