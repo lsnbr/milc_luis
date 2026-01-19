@@ -174,7 +174,7 @@ def bin_in_r_through_fcn(dist : np.ndarray, fcn : Callable[[float], float], tol 
 
 
 
-def bin_in_r_through_fcn_and_data(dist : np.ndarray, ense : np.ndarray, fcn : Callable[[float], float], reltol : float) -> Bins:
+def bin_in_r_through_fcn_and_data(dist : np.ndarray, ense : np.ndarray, fcn : Callable[[float], float], reltol : float, max_bin_size : float|None = None) -> Bins:
     '''Finds bins such that  bin_error / data_error <= reltol.
     Here, bin_error = |(mean of values at bin-points) - (val at mean-point of bin)|.'''
 
@@ -200,7 +200,7 @@ def bin_in_r_through_fcn_and_data(dist : np.ndarray, ense : np.ndarray, fcn : Ca
         cov_sum += cov[i_left:i, i-1].sum() + cov[i-1, i_left:i-1].sum()
         data_error = np.sqrt(cov_sum) / (i - i_left)
 
-        if bin_error / data_error > reltol:
+        if (max_bin_size is not None and dist[i-1] - dist[i_left] > max_bin_size) or (bin_error / data_error > reltol):
             bins.append((i_left, i-1))
             i_left = i-1
             cov_sum = 0

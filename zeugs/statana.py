@@ -65,7 +65,7 @@ def signal_to_noise_cut(data : np.ndarray, sn_cut : float) -> int|None:
 def expx_fcn(x : float, a_vals : list[float], m_vals : list[float]) -> float:
     '''Sum of len(a_vals) = len(m_vals) exponentials.'''
 
-    return sum( a * gv.exp(- m * x) / x
+    return sum( a * np.exp(- m * x) / x
                 for a, m in zip(a_vals, m_vals, strict=True) )
 
 
@@ -86,7 +86,7 @@ def expx(x : float, a : float, m : float) -> float:
 ###############################################################################
 
 
-def bin_data_through_fit(dist : np.ndarray, ense : np.ndarray, reltol : float, axes : list[plt.Axes]|None = None) -> tuple[Bins, lsqfit.nonlinear_fit]:
+def bin_data_through_fit(dist : np.ndarray, ense : np.ndarray, reltol : float, max_bin_size : float|None = None, axes : list[plt.Axes]|None = None) -> tuple[Bins, lsqfit.nonlinear_fit]:
     '''1. Bin data with constant bin size.
     2. Do fit (ignoring correlations for performance since only rough shape of fit is needed) starting at data with s/n < sn_cut (after binning).
     3. Find new bins such that bin_error is neglectable compared to data error.
@@ -107,7 +107,7 @@ def bin_data_through_fit(dist : np.ndarray, ense : np.ndarray, reltol : float, a
         p0    = {'a' : -1, 'm' : 1}
     )
 
-    vbins = bin_in_r_through_fcn_and_data(dist, ense, lambda r: f(r, fit.pmean), reltol)
+    vbins = bin_in_r_through_fcn_and_data(dist, ense, lambda r: f(r, fit.pmean), reltol, max_bin_size)
 
     # optional plotting
     if axes is not None:
@@ -127,13 +127,13 @@ def bin_data_through_fit(dist : np.ndarray, ense : np.ndarray, reltol : float, a
 
 
 
-def bin_multiple_series_through_fit(dist : np.ndarray, ense : np.ndarray, labels : dict[Any, str], reltol : float) -> dict[Any, Bins]:
+def bin_multiple_series_through_fit(dist : np.ndarray, ense : np.ndarray, labels : dict[Any, str], reltol : float, max_bin_size : float|None = None) -> dict[Any, Bins]:
     '''For all r-series (ense.shape[1:-1]) do binning by fit.'''
 
     bins : dict[Any, Bins] = {}
 
     for idx in labels.keys():
-        bins[idx], fit_for_binning = bin_data_through_fit(dist, ense[:, *idx, :], reltol)
+        bins[idx], fit_for_binning = bin_data_through_fit(dist, ense[:, *idx, :], reltol, max_bin_size)
 
         if fit_for_binning.pmean['a'] > 0 or fit_for_binning.pmean['m'] < 0:
             raise Exception(f'Bad preliminary fit for {idx=}:\n{fit_for_binning}')
@@ -144,7 +144,7 @@ def bin_multiple_series_through_fit(dist : np.ndarray, ense : np.ndarray, labels
 
 
 
-def bin_through_simultaneous_fit(dist : np.ndarray, ense : np.ndarray, labels : dict[Any, str], fit : lsqfit.nonlinear_fit, reltol : float) -> dict[Any, Bins]:
+def bin_through_simultaneous_fit(dist : np.ndarray, ense : np.ndarray, labels : dict[Any, str], fit : lsqfit.nonlinear_fit, reltol : float, max_bin_size : float|None = None) -> dict[Any, Bins]:
     '''...'''
 
     bins = {}
@@ -153,7 +153,8 @@ def bin_through_simultaneous_fit(dist : np.ndarray, ense : np.ndarray, labels : 
             dist   = dist,
             ense   = ense[:, *idx, :],
             fcn    = lambda r: fit.fcn({idx : r}, fit.pmean)[idx],
-            reltol = reltol
+            reltol = reltol,
+            max_bin_size = max_bin_size
         )
 
     return bins
@@ -163,7 +164,7 @@ def bin_through_simultaneous_fit(dist : np.ndarray, ense : np.ndarray, labels : 
 
 
 def bin_cut_avg_data(
-        dist : np.ndarray, ense : np.ndarray, bins : dict[Any, Bins], sn_cut : float|None = None, r_min : float|None = None
+        dist : np.ndarray, ense : np.ndarray, bins : dict[Any, Bins], sn_cut : float|None = None, r_min : float|None = None, r_cuts0 : dict[Any, float]|None = None
     ) -> tuple[dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, float]]:
     '''1. Bin each r-series individually (no cross-correlation computations).
     1. Find ir_cut for each r-series based on sn_cut.
@@ -181,11 +182,14 @@ def bin_cut_avg_data(
 
     for idx in bins.keys():
 
-        if sn_cut is not None and r_min is None:
+        if sn_cut is not None and r_min is None and r_cuts0 is None:
             ir_cut = signal_to_noise_cut(gv.dataset.avg_data(ense_binned[idx]), sn_cut)
 
-        elif sn_cut is None and r_min is not None:
+        elif sn_cut is None and r_min is not None and r_cuts0 is None:
             ir_cut = index_from_distance(dist_binned[idx], r_min)
+
+        elif sn_cut is None and r_min is None and r_cuts0 is not None:
+            ir_cut = index_from_distance(dist_binned[idx], r_cuts0[idx])
 
         else:
             raise Exception(f'Exactly one must be None: {sn_cut=}, {r_min=}.')

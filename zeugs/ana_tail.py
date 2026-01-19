@@ -215,20 +215,38 @@ def main_simfit():
 
     # preparing unbinned data
     dist     = radial_separations(ns)
-    ense_all = get_data_unbinned() * nt**2  # T^8 units
+    ense_all = get_data_unbinned()
 
 
 
     # fit fit fit
     print()
     fit, ense_binned, r_cuts = iterative_fit(
-        dist        = dist,
-        ense        = ense_all,
-        labels      = labels,
-        reltol      = reltol,
-        sn_cut      = sn_cut_fit,
-        ex_mats_seq = [(0,0), (0,1), (0,2)]#, (0,3), (0,4)]
+        dist         = dist,
+        ense         = ense_all,
+        labels       = labels,
+        reltol       = reltol,
+        sn_cut       = sn_cut_fit,
+        max_bin_size = 10,
+        ex_mats_seq  = [(0,0), (0,1), (0,2)]#, (0,3), (0,4)]
     )
+
+
+    # # fit for presentation
+    # cbins = find_distance_bins(dist, 0.25)
+    # dist_binned, data_binned, ense_binned, r_cuts = bin_cut_avg_data(
+    #     dist = dist,
+    #     ense = ense_all,
+    #     bins = {idx : cbins for idx in labels.keys()},
+    #     r_cuts0 = r_cuts
+    # )
+    # fit = fit_flowtime_and_tau_tails_with_prior(
+    #     dist = dist_binned,
+    #     data = data_binned,
+    #     excited_max = 0,
+    #     mats_max = 1,
+    # )
+    # print() ; print() ; print(fit)
 
 
 
@@ -283,16 +301,17 @@ main = main_simfit
 
 
 
-def iterative_fit( dist   : np.ndarray, ense   : np.ndarray, labels : dict[Any, str],
-                   reltol : float,      sn_cut : float,
+def iterative_fit( dist   : np.ndarray, ense   : np.ndarray, labels       : dict[Any, str],
+                   reltol : float,      sn_cut : float,      max_bin_size : float|None,
                    ex_mats_seq : list[tuple[int, int]]
                  ) -> tuple[lsqfit.nonlinear_fit, dict, dict]:
     '''...'''
 
-    # preliminary binning using simple individual fits
-    bins0 = bin_multiple_series_through_fit(dist, ense, labels, reltol)
+    # preliminary constant size bins
+    bins_c = find_distance_bins(dist, 1)
+    bins0 = {idx : bins_c for idx in labels.keys()}
 
-    # some variables
+    # initial parameters initially determined solely through prior
     p0 = None
 
     # iteratively fit with increasing maximal excited states and matsubara modes
@@ -305,7 +324,7 @@ def iterative_fit( dist   : np.ndarray, ense   : np.ndarray, labels : dict[Any, 
         fit0 = fit_flowtime_and_tau_tails_with_prior(dist_binned, data_binned, ex_max, mats_max, p0=p0)
 
         # use fit to create more accurate bins, and bin data
-        bins = bin_through_simultaneous_fit(dist, ense, labels, fit0, reltol)
+        bins = bin_through_simultaneous_fit(dist, ense, labels, fit0, reltol, max_bin_size)
         dist_binned, data_binned, ense_binned, r_cuts = bin_cut_avg_data(dist, ense, bins, sn_cut=sn_cut)
 
         # do the actual fit
@@ -321,7 +340,7 @@ def iterative_fit( dist   : np.ndarray, ense   : np.ndarray, labels : dict[Any, 
         # set initial parameters and bins for next iteration
         if fit.Q > 0.05:
             p0    = fit.pmean
-            bins0 = bins
+            # bins0 = bins
 
     print()
     return fit, ense_binned, r_cuts
@@ -342,13 +361,13 @@ def fit_flowtime_and_tau_tails_with_prior(dist : dict[Any, np.ndarray], data : d
     '''fit with priors'''
 
     iflows = sorted(iflow for iflow, tau in data.keys())
-    prior  = make_prior(excited_max, mats_max, iflows)
+    prior  = make_prior_constr(excited_max, mats_max, iflows)
 
     def fitfcn(x, p):
         y = {}
         for idx in x.keys():
             iflow, tau = idx
-            y[idx] = expx_ex_mats(x[idx], p, iflow, tau, excited_max, mats_max)
+            y[idx] = expx_single_tau(x[idx], p, iflow, tau, excited_max, mats_max)
         return y
     
     return (
@@ -361,33 +380,72 @@ def fit_flowtime_and_tau_tails_with_prior(dist : dict[Any, np.ndarray], data : d
 
 
 
-def make_prior(excited_max : int, mats_max : int, iflowtimes : list[int]) -> dict[Any, gv.GVar]:
+
+
+# ground state and first 2 excited 0-+ glueball state masses (in units of 1/a) (in continuum R^3 SU(3))
+masses_0p = [0.39, 0.55, 0.69]
+
+# matsubara frequencies (in units of 1/a)
+p_mats = lambda mats : mats * 2 * np.pi / nt
+
+# rough estimate of higher matsubara mass
+m_mats = lambda m, mats: np.sqrt( m**2 + p_mats(mats)**2 )
+
+
+
+
+def make_prior(excited_max : int, mats_max : int, iflowtimes : list[int]) -> gv.BufferDict:
     '''constructs prior'''
 
     if excited_max > 2:
         raise Exception('Not yet implemented for excited_max > 2.')
-    
-    # gs and first 2 excited 0-+ glueball state masses (in units of 1/a) (in continuum R^3 SU(3))
-    masses_0p = [0.39, 0.55, 0.69]
-
-    # matsubara frequencies (in units of 1/a)
-    p_mats = lambda mats : mats * 2 * np.pi / nt
-
-    # rough estimate of higher matsubara mass
-    m_mats = lambda m, mats: np.sqrt( m**2 + p_mats(mats)**2 )
 
     # now build prior
-    prior : dict[Any, gv.GVar] = {}
+    prior = gv.BufferDict()
+
     for n_ex, m_0p in enumerate(masses_0p[:excited_max+1]):
         for mats in range(mats_max+1):
 
             # mass (flowtime idependent)
             m_guess = m_mats(m_0p, mats)
-            prior['m', n_ex, mats] = gv.gvar(m_guess, m_guess * 0.5)
+            prior[f'm_{n_ex}_{mats}'] = gv.gvar(m_guess, m_guess * 0.5)
 
             # amplitudes (flowtime dependent)
             for ift in iflowtimes:
-                prior['a', ift, n_ex, mats] = gv.gvar(-10, 100)
+                prior[f'a_{ift}_{n_ex}_{mats}'] = gv.gvar(-1, 100)
+
+    return prior
+
+
+
+
+def make_prior_constr(excited_max : int, mats_max : int, iflowtimes : list[int]) -> gv.BufferDict:
+    '''construct prior, incorporating constraints on masses'''
+
+    if excited_max > 2:
+        raise Exception('Not yet implemented for excited_max > 2.')
+    
+    # add distributions to reparametrize masses to enforce constraints
+    for mats in range(mats_max+1):
+        if not gv.BufferDict.has_distribution(f'f_p{mats}'):
+            gv.BufferDict.add_distribution(
+                f'f_p{mats}',
+                lambda x: p_mats(mats) + gv.exp(x)
+            )
+    
+    # now build prior
+    prior = gv.BufferDict()
+
+    for n_ex, m_0p in enumerate(masses_0p[:excited_max+1]):
+        for mats in range(mats_max+1):
+        
+            # mass (flowtime idependent), constrained to  m >= p_mats
+            m_guess = m_mats(m_0p, mats)
+            prior[f'f_p{mats}(m_{n_ex}_{mats})'] = gv.log(gv.gvar(m_guess, m_guess*0.95) - p_mats(mats))
+
+            # amplitudes (flowtime dependent)
+            for ift in iflowtimes:
+                prior[f'a_{ift}_{n_ex}_{mats}'] = gv.gvar(-1, 100)
 
     return prior
 
@@ -395,26 +453,26 @@ def make_prior(excited_max : int, mats_max : int, iflowtimes : list[int]) -> dic
 
 
 
-def expx_ex_mats(x : float, p : dict, iflow : int, tau : int, ex_max : int, mats_max : int) -> float:
+
+
+def expx_single_tau(x : float, p : dict, iflow : int, tau : int, ex_max : int, mats_max : int) -> float:
     '''fit function with multiple excited states and matsubara modes'''
 
-    # n-th matsubara frequency = ω(n) = n 2pi T = n 2pi / (nt a) = (n 2pi / nt) (1/a)
-    ω = lambda mats : mats * 2 * np.pi / nt
+    return sum(
+        gv.cos(p_mats(mats) * tau) * expx_single_mats(x, p, iflow, mats, ex_max)
+        for mats in range(mats_max + 1)
+    )
 
-    res = 0
 
-    # sum over matsubara frequencies
-    for mats in range(mats_max+1):
-        res_n = 0
 
-        # sum over masses in n-th matsubara sector
-        for n_ex in range(ex_max+1):
-            res_n += expx( x, p['a', iflow, n_ex, mats], p['m', n_ex, mats] )
 
-        # weight by cos due to fourier transform
-        res += res_n * gv.cos(ω(mats)*tau)
+def expx_single_mats(x : float, p : dict, iflow : int, mats : int, ex_max : int) -> float:
+    '''fit function for a single matsubara mode and possibly multiple excited states'''
 
-    return res
+    return sum(
+        expx( x, p[f'a_{iflow}_{n_ex}_{mats}'], p[f'm_{n_ex}_{mats}'] )
+        for n_ex in range(ex_max + 1)
+    )
 
 
 
@@ -441,7 +499,14 @@ def plot_flowtime_and_tau_fits(dist : np.ndarray, labels : dict[Any, str], r_cut
         plot_dist(fit.x[idx], fit.y[idx], axes[axes_idxs[idx]])
         plot_fitfcn(dist[ir_cut:], y_fit, axes[axes_idxs[idx]])
 
-        axes[axes_idxs[idx]].set_xlim(0, dist[-1]*2/3)
+        r_max = dist[-1]*2/3
+        ir_max = index_from_distance(fit.x[idx], r_max)
+
+        y_min = min(min(gv.mean(y_fit)), min(gv.mean(fit.y[idx][:ir_max])))
+        y_max = max(max(gv.mean(y_fit)), max(gv.mean(fit.y[idx][:ir_max])))
+        y_range = y_max - y_min
+        axes[axes_idxs[idx]].set_ylim(y_min - 0.1*y_range, y_max + 0.1*y_range)
+        axes[axes_idxs[idx]].set_xlim(0, r_max)
         axes[axes_idxs[idx]].set_title(labels[idx])
 
     
