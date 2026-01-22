@@ -56,16 +56,18 @@ def temp_rel_crit(beta : float, Nt : int) -> float:
 
 if __name__ == '__main__':
 
-    Nt = 8
-    T_Tc = 1.5
+    Nt = 16
+    T_Tc = 0.99
 
     beta = find_beta(Nt, T_Tc)
     print(beta)
 
     print(temp_rel_crit(beta, Nt))
 
+    print()
+
 
 
     Nt = 16
-    beta = 6.07
+    beta = 6.542
     print(temp_rel_crit(beta, Nt))

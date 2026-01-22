@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from flowing import flowtime_to_radius, radius_to_flowtime
 from measurements import *
 from statana import *
-from ana_tail import make_prior_constr, expx_single_mats, plot_flowtime_and_tau_fits
+from ana_tail import make_prior_constr, expx_single_mats, plot_flowtime_and_tau_fits, p_mats
 
 
 
@@ -40,7 +40,7 @@ def main2():
 
 
     # bin with constant r bins
-    bin_size = 0.25
+    bin_size = [0.25, 0.5][1]
     bins = find_distance_bins(dist, bin_size)
     dist_binned, = bin_averages(bins, dist)
 
@@ -142,13 +142,13 @@ def main2():
             rf = flowtime_to_radius(flowtimes[iflow], nt) * nt
             labels[iflow, mats] = f'rf={rf:.2f}a, n={mats}'
 
-    dist_fit, data_fit, ense_fit, r_cuts_fit = bin_cut_avg_data(dist, ense_all, {idx : bins for idx in labels.keys()}, sn_cut=10)
+    dist_fit, data_fit, ense_fit, r_lims_fit = bin_cut_avg_data(dist, ense_all, {idx : bins for idx in labels.keys()}, sn_cut_left=10)
 
     fit0 = fit_flowtime_and_mats_tails_with_prior(dist_fit, data_fit, excited_max=0, mats_max=2)
     print(fit0)
 
     bins2 = bin_through_simultaneous_fit(dist, ense_all, labels, fit0, reltol=0.025, max_bin_size=10)
-    dist_fit, data_fit, ense_fit, r_cuts_fit = bin_cut_avg_data(dist, ense_all, bins2, sn_cut=10)
+    dist_fit, data_fit, ense_fit, r_lims_fit = bin_cut_avg_data(dist, ense_all, bins2, sn_cut_left=10)
 
     fit = fit_flowtime_and_mats_tails_with_prior(dist_fit, data_fit, excited_max=0, mats_max=2)
     print(fit)
@@ -159,7 +159,7 @@ def main2():
     fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
     axes = np.reshape(axes, shape=(nrows, ncols))
 
-    plot_flowtime_and_tau_fits(dist, labels, r_cuts_fit, fit, synchro=True, axes=axes)
+    plot_flowtime_and_tau_fits(dist, labels, r_lims_fit, fit, synchro=True, axes=axes)
 
     fig.tight_layout()
     fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'gridmats_fits.png', dpi=400)
@@ -171,7 +171,30 @@ def main2():
     ###################################################################
     print('do fits (integrand)...')
 
-    
+    ense_int = ense_all[:, :, :3, :].copy()
+    for mats in range(3):
+        for iflow, _ in enumerate(flowtimes):
+            ense_int[:, iflow, mats, :] = build_integrand(dist, ense_int[:, iflow, mats, :], mats)
+
+    rlims_int = { 0 : (8, 20), 1 : (7, 17), 2 : (6, 13) }
+    r_cuts0_left  = { (iflow, mats) : rlims_int[mats][0] for iflow, mats in labels.keys() }
+    r_cuts0_right = { (iflow, mats) : rlims_int[mats][1] for iflow, mats in labels.keys() }
+    # dist_fit, data_fit, ense_fit, r_lims_fit = bin_cut_avg_data(dist, ense_int, {idx : bins for idx in labels.keys()}, sn_cut_left=15, err_max_right=0.02)
+    dist_fit, data_fit, ense_fit, r_lims_fit = bin_cut_avg_data(dist, ense_int, {idx : bins for idx in labels.keys()}, r_cuts0_left=r_cuts0_left, r_cuts0_right=r_cuts0_right)
+
+    fit0 = fit_flowtime_and_mats_tails_int_with_prior(dist_fit, data_fit, excited_max=0, mats_max=2)
+    print(fit0)
+
+
+    # plot fits
+    nrows, ncols = 2, 3
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+    axes = np.reshape(axes, shape=(nrows, ncols))
+
+    plot_flowtime_and_tau_fits(dist, labels, r_lims_fit, fit0, synchro=True, axes=axes)
+
+    fig.tight_layout()
+    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'gridmats_int_fits.png', dpi=400)
 
 
 
@@ -207,6 +230,31 @@ def fit_flowtime_and_mats_tails_with_prior(dist : dict[Any, np.ndarray], data : 
 
 
 
+def fit_flowtime_and_mats_tails_int_with_prior(dist : dict[Any, np.ndarray], data : dict[Any, np.ndarray], excited_max : int, mats_max : int, p0 : dict|None = None, corr : bool = True) -> lsqfit.nonlinear_fit:
+    '''fit with priors'''
+
+    iflows = sorted(iflow for iflow,_ in data.keys())
+    prior  = make_prior_constr(excited_max, mats_max, iflows)
+
+    def fitfcn(x, p):
+        y = {}
+        for idx in x.keys():
+            iflow, mats = idx
+            y[idx] = build_integrand(
+                x[idx],
+                expx_single_mats(x[idx], p, iflow, mats, excited_max),
+                mats
+            )
+        return y
+    
+    return (
+        lsqfit.nonlinear_fit( data =(dist, data), fcn=fitfcn, prior=prior, p0=p0 )
+        if corr else
+        lsqfit.nonlinear_fit( udata=(dist, data), fcn=fitfcn, prior=prior, p0=p0 )
+    )
+
+
+
 
 
 
@@ -228,22 +276,15 @@ def build_integrand(dist : np.ndarray, data : np.ndarray, mats : int) -> np.ndar
     '''computes integrand of H_E in units of T^5'''
 
     if mats == 0:
-        res = data * dist**2
+        res = data * dist**2 / nt**2
     
     else:
-        w = mats_freq(mats)
-        res = data * dist * np.sinh(w*dist) / w
+        w = p_mats(mats)
+        res = data * dist * np.sinh(w*dist/nt) / w / nt
 
-    return res / nt**2
-
-
+    return res
 
 
-
-def mats_freq(mats : int) -> float:
-    '''matsubara frequency in units of (1/a)'''
-
-    return mats * 2*np.pi / nt 
 
 
 

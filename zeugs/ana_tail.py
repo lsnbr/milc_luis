@@ -221,7 +221,7 @@ def main_simfit():
 
     # fit fit fit
     print()
-    fit, ense_binned, r_cuts = iterative_fit(
+    fit, ense_binned, r_lims = iterative_fit(
         dist         = dist,
         ense         = ense_all,
         labels       = labels,
@@ -266,7 +266,7 @@ def main_simfit():
     fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
     axes = np.reshape(axes, shape=(nrows, ncols))
     
-    plot_flowtime_and_tau_fits(dist, labels, r_cuts, fit, synchro, axes)
+    plot_flowtime_and_tau_fits(dist, labels, r_lims, fit, synchro, axes)
 
     fig.tight_layout()
     fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'simplot_prior.png', dpi=400)
@@ -318,14 +318,14 @@ def iterative_fit( dist   : np.ndarray, ense   : np.ndarray, labels       : dict
     for i, (ex_max, mats_max) in enumerate(ex_mats_seq, start=1):
 
         # bin data using previously determined bins
-        dist_binned, data_binned, _, _ = bin_cut_avg_data(dist, ense, bins0, sn_cut=sn_cut)
+        dist_binned, data_binned, _, _ = bin_cut_avg_data(dist, ense, bins0, sn_cut_left=sn_cut)
 
         # do initial fit
         fit0 = fit_flowtime_and_tau_tails_with_prior(dist_binned, data_binned, ex_max, mats_max, p0=p0)
 
         # use fit to create more accurate bins, and bin data
         bins = bin_through_simultaneous_fit(dist, ense, labels, fit0, reltol, max_bin_size)
-        dist_binned, data_binned, ense_binned, r_cuts = bin_cut_avg_data(dist, ense, bins, sn_cut=sn_cut)
+        dist_binned, data_binned, ense_binned, r_lims = bin_cut_avg_data(dist, ense, bins, sn_cut_left=sn_cut)
 
         # do the actual fit
         fit = fit_flowtime_and_tau_tails_with_prior(dist_binned, data_binned, ex_max, mats_max, p0=p0)
@@ -343,7 +343,7 @@ def iterative_fit( dist   : np.ndarray, ense   : np.ndarray, labels       : dict
             # bins0 = bins
 
     print()
-    return fit, ense_binned, r_cuts
+    return fit, ense_binned, r_lims
 
 
 
@@ -496,7 +496,7 @@ def expx_single_mats(x : float, p : dict, iflow : int, mats : int, ex_max : int)
 
 
 
-def plot_flowtime_and_tau_fits(dist : np.ndarray, labels : dict[Any, str], r_cuts : dict[Any, float], fit : lsqfit.nonlinear_fit, synchro : bool, axes : np.ndarray) -> None:
+def plot_flowtime_and_tau_fits(dist : np.ndarray, labels : dict[Any, str], r_lims : dict[Any, tuple[float, float]], fit : lsqfit.nonlinear_fit, synchro : bool, axes : np.ndarray) -> None:
     '''plot all tails with data and fit, optionally synchro flowtimes across columns'''
 
     # map (iflow, tau) onto indices of grid of plots
@@ -508,21 +508,25 @@ def plot_flowtime_and_tau_fits(dist : np.ndarray, labels : dict[Any, str], r_cut
     # plot original and fitted data
     for idx in labels.keys():
         iflow, tau = idx
-        ir_cut = index_from_distance(dist, r_cuts[idx])
 
-        y_fit = fit.fcn({idx : dist[ir_cut:]}, fit.p)[idx]
+        r_left, r_right   = r_lims[idx]
+        ir_left, ir_right = index_from_distance(dist, r_left), index_from_distance(dist, r_right)
+        if r_right > dist[-1]:
+            r_right *= 0.75 / 1.1
+            ir_right = index_from_distance(dist, r_right)
+
+        y_fit = fit.fcn({idx : dist[ir_left:ir_right]}, fit.p)[idx]
 
         plot_dist(fit.x[idx], fit.y[idx], axes[axes_idxs[idx]])
-        plot_fitfcn(dist[ir_cut:], y_fit, axes[axes_idxs[idx]])
+        plot_fitfcn(dist[ir_left:ir_right], y_fit, axes[axes_idxs[idx]])
 
-        r_max = dist[-1]*2/3
-        ir_max = index_from_distance(fit.x[idx], r_max)
-
-        y_min = min(min(gv.mean(y_fit)), min(gv.mean(fit.y[idx][:ir_max])))
-        y_max = max(max(gv.mean(y_fit)), max(gv.mean(fit.y[idx][:ir_max])))
+        # y_min = min(min(gv.mean(y_fit)), min(gv.mean(fit.y[idx])))
+        # y_max = max(max(gv.mean(y_fit)), max(gv.mean(fit.y[idx])))
+        y_min = min(gv.mean(y_fit))
+        y_max = max(gv.mean(y_fit))
         y_range = y_max - y_min
         axes[axes_idxs[idx]].set_ylim(y_min - 0.1*y_range, y_max + 0.1*y_range)
-        axes[axes_idxs[idx]].set_xlim(0, r_max)
+        axes[axes_idxs[idx]].set_xlim(0, r_right * 1.1)
         axes[axes_idxs[idx]].set_title(labels[idx])
 
     
@@ -754,7 +758,7 @@ def do_tail_fit_and_sum(dist : np.ndarray, ense : np.ndarray, labels : np.ndarra
     bins = bin_multiple_series_through_fit(dist, ense, reltol)
 
     # get binned stuff, starting at sn_cut
-    dist_binned, data_binned, r_cuts_sn = bin_cut_avg_data(dist, ense, bins, sn_cut)
+    dist_binned, data_binned, r_cuts_sn, _ = bin_cut_avg_data(dist, ense, bins, sn_cut)
 
     # do the fit
     fit = do_tail_fit_combined(dist_binned, data_binned, labels)

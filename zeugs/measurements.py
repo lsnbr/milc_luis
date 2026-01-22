@@ -185,6 +185,7 @@ def bin_in_r_through_fcn_and_data(dist : np.ndarray, ense : np.ndarray, fcn : Ca
     i_start = 1
     cov_sum = 0
 
+    # prevent potential div by 0
     if dist[0] == 0:
         bins.append((0,1))
         i_left = 1

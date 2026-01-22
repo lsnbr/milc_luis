@@ -62,6 +62,17 @@ def signal_to_noise_cut(data : np.ndarray, sn_cut : float) -> int|None:
 
 
 
+def index_max_error(data : np.ndarray, err_max : float) -> int:
+    '''finds the index i, such that d[j].sdev > err_max for all j >= i.'''
+
+    for i, d in enumerate(data[::-1]):
+        if d.sdev <= err_max:
+            return len(data) - i
+    return 0
+
+
+
+
 def expx_fcn(x : float, a_vals : list[float], m_vals : list[float]) -> float:
     '''Sum of len(a_vals) = len(m_vals) exponentials.'''
 
@@ -150,10 +161,10 @@ def bin_through_simultaneous_fit(dist : np.ndarray, ense : np.ndarray, labels : 
     bins = {}
     for idx in labels.keys():
         bins[idx] = bin_in_r_through_fcn_and_data(
-            dist   = dist,
-            ense   = ense[:, *idx, :],
-            fcn    = lambda r: fit.fcn({idx : r}, fit.pmean)[idx],
-            reltol = reltol,
+            dist         = dist,
+            ense         = ense[:, *idx, :],
+            fcn          = lambda r: fit.fcn({idx : r}, fit.pmean)[idx],
+            reltol       = reltol,
             max_bin_size = max_bin_size
         )
 
@@ -165,11 +176,21 @@ def bin_through_simultaneous_fit(dist : np.ndarray, ense : np.ndarray, labels : 
 
 def bin_cut_avg_data(
         dist : np.ndarray, ense : np.ndarray, bins : dict[Any, Bins],
-        sn_cut : float|None = None, r_min : float|None = None, r_cuts0 : dict[Any, float]|None = None
-    ) -> tuple[dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, float]]:
-    '''1. Bin each r-series individually (no cross-correlation computations).
-    1. Find ir_cut for each r-series based on sn_cut.
-    3. Bin and avg data starting at ir_cut, computing all correlations, returning dicts of dist, data, ense and r_cuts.'''
+        sn_cut_left : float|None = None, r_min_left : float|None = None, r_cuts0_left : dict[Any, float]|None = None,
+        err_max_right : float|None = None, r_cuts0_right : dict[Any, float]|None = None
+    ) -> tuple[dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, tuple[float, float]]]:
+    '''
+    What it does:
+        1. Bins each series according to its bins
+        2. Determines left and right limits of distances to be included in final data
+        3. Averages data over all samples, computing all correlations
+
+    What it returns:
+        - dict of binned distances (dict of arrays of floats)
+        - dict of binned data (dict of arrays of gvars)
+        - dict of binned ensemble data (dict of 2d arrays of floats)
+        - dict of left and right most distances (dict of (float, float))
+    '''
 
     # bin dist and ense
     dist_binned : dict[Any, np.ndarray] = {}
@@ -177,41 +198,63 @@ def bin_cut_avg_data(
     for idx in bins.keys():
         dist_binned[idx], ense_binned[idx] = bin_averages(bins[idx], dist, ense[:, *idx, :])
 
-    # determine ir_cuts based on sn_cut
-    ir_cuts : dict[Any, int]   = {}
-    r_cuts  : dict[Any, float] = {}
+
+    # determine range of r values included in final data
+    ir_lims : dict[Any, tuple[int, int]]     = {}
+    r_lims  : dict[Any, tuple[float, float]] = {}
 
     for idx in bins.keys():
+        data = gv.dataset.avg_data(ense_binned[idx])
 
-        if sn_cut is not None and r_min is None and r_cuts0 is None:
-            ir_cut = signal_to_noise_cut(gv.dataset.avg_data(ense_binned[idx]), sn_cut)
 
-        elif sn_cut is None and r_min is not None and r_cuts0 is None:
-            ir_cut = index_from_distance(dist_binned[idx], r_min)
+        # determining left most r-value for each series
+        if sn_cut_left is not None and r_min_left is None and r_cuts0_left is None:
+            ir_left = signal_to_noise_cut(data, sn_cut_left)
 
-        elif sn_cut is None and r_min is None and r_cuts0 is not None:
-            ir_cut = index_from_distance(dist_binned[idx], r_cuts0[idx])
+        elif sn_cut_left is None and r_min_left is not None and r_cuts0_left is None:
+            ir_left = index_from_distance(dist_binned[idx], r_min_left)
+
+        elif sn_cut_left is None and r_min_left is None and r_cuts0_left is not None:
+            ir_left = index_from_distance(dist_binned[idx], r_cuts0_left[idx])
 
         else:
-            raise Exception(f'Exactly one must be None: {sn_cut=}, {r_min=}, {r_cuts0=}.')
+            raise Exception(f'Exactly one must be None: {sn_cut_left=}, {r_min_left=}, {r_cuts0_left=}.')
 
-        if ir_cut is None:
+        if ir_left is None:
             raise Exception(f'Found no ir_cut for {idx=}.')
         
-        ir_cuts[idx] = ir_cut
-        r_cuts[idx]  = dist_binned[idx][ir_cut]
+        r_left = dist_binned[idx][ir_left]
 
-    # build dist and ense starting from ir_cuts, then average
+
+        # determining right most r-value for each series
+        if err_max_right is not None and r_cuts0_right is None:
+            ir_right = index_max_error(data, err_max_right)
+
+        elif err_max_right is None and r_cuts0_right is not None:
+            ir_right = index_from_distance(dist_binned[idx], r_cuts0_right[idx])
+
+        else:
+            ir_right = len(data)
+
+        r_right = dist_binned[idx][ir_right] if ir_right < len(data) else 1.1 * dist_binned[idx][-1]
+
+
+        ir_lims[idx] = (ir_left, ir_right)
+        r_lims[idx]  = (r_left,  r_right)
+
+
+    # build dist and ense starting in determined range of distances, then compute sample average
     dist_binned_cut : dict[Any, np.ndarray] = {}
     ense_binned_cut : dict[Any, np.ndarray] = {}
 
     for idx in bins.keys():
-        ir_cut = ir_cuts[idx]
-        dist_binned_cut[idx], ense_binned_cut[idx] = dist_binned[idx][ir_cut:], ense_binned[idx][:, ir_cut:]
+        ir_left, ir_right = ir_lims[idx]
+        dist_binned_cut[idx], ense_binned_cut[idx] = dist_binned[idx][ir_left:ir_right], ense_binned[idx][:, ir_left:ir_right]
 
     data_binned_cut : dict[Any, np.ndarray] = gv.dataset.avg_data(ense_binned_cut)
 
-    return dist_binned_cut, data_binned_cut, ense_binned_cut, r_cuts
+
+    return dist_binned_cut, data_binned_cut, ense_binned_cut, r_lims
     
 
     
