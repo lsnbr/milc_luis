@@ -69,5 +69,5 @@ if __name__ == '__main__':
 
 
     Nt = 16
-    beta = 6.542
+    beta = 6.8
     print(temp_rel_crit(beta, Nt))

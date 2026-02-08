@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 from flowing import gen_input_initial, gen_configs_ora
@@ -16,31 +17,32 @@ run_cmd = ['srun' if slurm else 'mpirun', '-n', str(ncores)]
 
 
 
-ns = 36
+ns = 96
 nt = 16
 
-T_Tc = 1.5      # just as info
-beta = 6.868    # depends on nt and T_Tc
+T_Tc = 0.99      # just as info
+beta = 6.542     # depends on nt and T_Tc
 
 
-number_of_saved_configs = 5000
-save_every_nth_config   = 25
-
-
-
+number_of_saved_configs = 150
+save_every_nth_config   = 50
 
 
 
-branch = 0
 
-iseed = 2314 + 1_000_000*branch + 1_000_000_000*(0 if ns==64 else ns)      # third part with ns was not used for ns=64
+
+branch = int(sys.argv[1])
+
+iseed = 3141 + 1_000_000*branch #+ 1_000_000_000*(0 if ns==64 else ns)      # third part with ns was not used for ns=64
+
+
 
 scratch_path    = Path('/work/scratch/ln29bamu')
 
-# lattice_initial = None
-lattice_initial = scratch_path / 'gauge_configs_36' / f'init' / 'pg_00025000.lat'       # continue from last config of some branch
+# lattice_initial = 'warm'
+lattice_initial = scratch_path / 'gauge_configs_0p99Tc' / f'init' / 'pg_00005000.lat'       # continue from last config of some branch
 
-save_dir        = scratch_path / 'gauge_configs_36' / f'branch{branch}'
+save_dir        = scratch_path / 'gauge_configs_0p99Tc' / f'branch{branch}'
 
 
 

@@ -51,8 +51,11 @@ def do_warmups(sweeps : int, beta : float, input_initial : str, lat_out : Path, 
 
 
 def gen_configs_ora( configs : int, every_nth : int, beta : float,
-                     lat_initial : Path|None, save_dir : Path, input_initial : str, run_cmd : list[str] ) -> str:
+                     lat_initial : Path|str|None, save_dir : Path, input_initial : str, run_cmd : list[str] ) -> str:
     '''Takes a start config from which it generates new ones, saving every measurement interval.'''
+
+    if   lat_initial is None:           lat_initial = 'fresh'
+    elif isinstance(lat_initial, Path): lat_initial = f'reload_serial {lat_initial}'
 
     input_gen = \
         f'''
@@ -62,7 +65,7 @@ def gen_configs_ora( configs : int, every_nth : int, beta : float,
         beta {beta}
         steps_per_trajectory 4
         qhb_steps 1
-        {'fresh' if lat_initial is None else f'reload_serial {lat_initial}'}
+        {lat_initial}
         no_gauge_fix
         forget
         save_dir {save_dir}

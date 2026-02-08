@@ -175,9 +175,9 @@ def bin_through_simultaneous_fit(dist : np.ndarray, ense : np.ndarray, labels : 
 
 
 def bin_cut_avg_data(
-        dist : np.ndarray, ense : np.ndarray, bins : dict[Any, Bins],
+        dist : np.ndarray, ense : np.ndarray, bins : dict[Any, Bins|None],
         sn_cut_left : float|None = None, r_min_left : float|None = None, r_cuts0_left : dict[Any, float]|None = None,
-        err_max_right : float|None = None, r_cuts0_right : dict[Any, float]|None = None
+        err_max_right : float|None = None, r_cuts0_right : dict[Any, float]|None = None, r_max_right : float|None = None
     ) -> tuple[dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, tuple[float, float]]]:
     '''
     What it does:
@@ -196,7 +196,8 @@ def bin_cut_avg_data(
     dist_binned : dict[Any, np.ndarray] = {}
     ense_binned : dict[Any, np.ndarray] = {}
     for idx in bins.keys():
-        dist_binned[idx], ense_binned[idx] = bin_averages(bins[idx], dist, ense[:, *idx, :])
+        if bins[idx] is None: dist_binned[idx], ense_binned[idx] = dist, ense[:, *idx, :]
+        else:                 dist_binned[idx], ense_binned[idx] = bin_averages(bins[idx], dist, ense[:, *idx, :])
 
 
     # determine range of r values included in final data
@@ -208,30 +209,35 @@ def bin_cut_avg_data(
 
 
         # determining left most r-value for each series
-        if sn_cut_left is not None and r_min_left is None and r_cuts0_left is None:
-            ir_left = signal_to_noise_cut(data, sn_cut_left)
+        if sum(x is not None for x in (sn_cut_left, r_min_left, r_cuts0_left)) != 1:
+            raise Exception(f'Exactly one xyz_left argument must be not None.')
 
-        elif sn_cut_left is None and r_min_left is not None and r_cuts0_left is None:
+        if sn_cut_left is not None:
+            ir_left = signal_to_noise_cut(data, sn_cut_left)
+            if ir_left is None:
+                raise Exception(f'Found no ir_cut_left for {idx=}.')
+
+        elif r_min_left is not None:
             ir_left = index_from_distance(dist_binned[idx], r_min_left)
 
-        elif sn_cut_left is None and r_min_left is None and r_cuts0_left is not None:
+        elif r_cuts0_left is not None:
             ir_left = index_from_distance(dist_binned[idx], r_cuts0_left[idx])
-
-        else:
-            raise Exception(f'Exactly one must be None: {sn_cut_left=}, {r_min_left=}, {r_cuts0_left=}.')
-
-        if ir_left is None:
-            raise Exception(f'Found no ir_cut for {idx=}.')
         
         r_left = dist_binned[idx][ir_left]
-
+  
 
         # determining right most r-value for each series
-        if err_max_right is not None and r_cuts0_right is None:
+        if sum(x is not None for x in (err_max_right, r_cuts0_right, r_max_right)) > 1:
+            raise Exception(f'At most one xyz_right argument must be not None.')
+
+        if err_max_right is not None:
             ir_right = index_max_error(data, err_max_right)
 
-        elif err_max_right is None and r_cuts0_right is not None:
+        elif r_cuts0_right is not None:
             ir_right = index_from_distance(dist_binned[idx], r_cuts0_right[idx])
+
+        elif r_max_right is not None:
+            ir_right = index_from_distance(dist_binned[idx], r_max_right)
 
         else:
             ir_right = len(data)

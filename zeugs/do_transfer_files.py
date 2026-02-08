@@ -155,4 +155,5 @@ def trigger_write_access_files(folder : Path) -> None:
 
     print("\nDone.")
 
-# trigger_write_access_files(scratch_path / 'outputs')
+
+# trigger_write_access_files(scratch_path)

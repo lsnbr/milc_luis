@@ -1,10 +1,10 @@
 #!/bin/bash
 
 
-#SBATCH -J pg_gen_branchclll
+#SBATCH -J pg_gen_0p99Tc
 #SBATCH --mail-type=END
-#SBATCH -e /work/scratch/ln29bamu/outputs/branch1-15c_runs/%x.err.%j
-#SBATCH -o /work/scratch/ln29bamu/outputs/branch1-15c_runs/%x.out.%j
+#SBATCH -e /work/scratch/ln29bamu/outputs/gen_0p99Tc_branches/%x.err.%j
+#SBATCH -o /work/scratch/ln29bamu/outputs/gen_0p99Tc_branches/%x.out.%j
 #
 #SBATCH -N 1                 # Anzahl der Nodes
 #SBATCH -n 96                # Anzahl der Prozesse
@@ -22,7 +22,7 @@ module load openmpi python
 cd /home/ln29bamu/code/milc_luis/zeugs
 
 # Directory for logs
-OUTDIR=/work/scratch/ln29bamu/outputs/branch1-15c_runs
+OUTDIR=/work/scratch/ln29bamu/outputs/gen_0p99Tc_branches
 
 
 TOTAL_CORES=$SLURM_NTASKS

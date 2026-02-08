@@ -78,3 +78,42 @@ data_16_x_96_0p99Tc = {
     'exp_order' : 8,
 
 }
+
+
+
+
+
+
+data_16_x_64_15Tc = {
+
+    # lattice dimensions
+    'nt' : 16,
+    'ns' : ...,
+
+    # temperature chosen first, then beta determined using functions in 'scale_setting.py'
+    'T_Tc' : 15,
+    'beta' : ...,
+
+
+    # random seeds used in generating configs, iseed_init for initial stream and then multiple branches (init = branch 0)
+    'iseed_init' : 1412,
+    'iseed_branch' : (lambda branch : 1412 + 1_000_000*branch),
+
+    # cold start
+    'lattice_initial' : 'fresh',
+
+    # overrelaxation and quasi-heatbath sweeps per overall sweep
+    'or_sweeps' : 4,
+    'qhb_sweeps' : 1,
+
+
+    # flowtimes determined using adaptive rkmk3 with given local_tol, chosen such that relative errors due to numerical error of integrating gradient flow no more than 1e-3
+    'flowtimes' : ...,
+    'flow_type' : 'zeuthen',
+    'local_tol' : ...,
+
+    # gradient flow integrator details
+    'integrator' : 'rkmk3',
+    'exp_order' : 8,
+
+}

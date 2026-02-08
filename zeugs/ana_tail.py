@@ -17,14 +17,11 @@ from statana import *
 
 
 
+from ensemble_data import data_16_x_64_1p5Tc
 
-
-nt = 16
-ns = 64
-flowtimes = np.array([ 0.02572923590301565, 0.05303278154520656, 0.08103495224784385, 0.110208782326772,  0.141058391298962,  0.1736893835495303,
-                       0.2086835114617738,  0.2454549361253429,  0.2838117228448263,  0.3249152519239425, 0.3705101434001126, 0.4179449298122797,
-                       0.4696233239687699,  0.5279559816139976,  0.5890993819917063,  0.6570215111572449, 0.734680305158274,  0.8257738792221512,
-                       0.9353328035912798,  1.06959076807306,    1.233820281085228,   1.435936459574629 ], dtype=float)
+nt = data_16_x_64_1p5Tc['nt']
+ns = data_16_x_64_1p5Tc['ns']
+flowtimes = data_16_x_64_1p5Tc['flowtimes']
 
 
 
@@ -193,7 +190,19 @@ def main_simfit():
         ( 7, [   15] ),
         ( 8, [   15] ),
     ]
-    flowtime_windows = windows_range
+    # lots of data and full windows for high tau
+    windows_range2 = [
+        ( 0, [10,14] ),
+        ( 1, [10,14] ),
+        ( 2, [10,14] ),
+        ( 3, [10,14] ),
+        ( 4, [10,14] ),
+        ( 5, [6,8,10] ),
+        ( 6, [8,10,12] ),
+        ( 7, [11,13,15] ),
+        ( 8, [13,15,17] )
+    ]
+    flowtime_windows = windows_range2
 
     # labels for each flowtime-tau combination
     labels = {}
@@ -204,13 +213,12 @@ def main_simfit():
 
 
     # some parameters
-    reltol     = 0.025
-    sn_cut_fit = 10
+    reltol       = 0.025
+    sn_cut_fit   = 10
+    sn_cut_sum   = 2
+    max_bin_size = 10
+    ex_max_seq   = [(0,0), (0,1), (0,2)]#, (0,3), (0,4)]
 
-    ex_max     = 0
-    mats_max   = 1
-
-    sn_cut_sum = 3
 
 
     # preparing unbinned data
@@ -219,70 +227,103 @@ def main_simfit():
 
 
 
-    # fit fit fit
-    print()
-    fit, ense_binned, r_lims = iterative_fit(
-        dist         = dist,
-        ense         = ense_all,
-        labels       = labels,
-        reltol       = reltol,
-        sn_cut       = sn_cut_fit,
-        max_bin_size = 10,
-        ex_mats_seq  = [(0,0), (0,1), (0,2)]#, (0,3), (0,4)]
-    )
-
-
-    # # fit for presentation
-    # cbins = find_distance_bins(dist, 0.25)
-    # dist_binned, data_binned, ense_binned, r_cuts = bin_cut_avg_data(
-    #     dist = dist,
-    #     ense = ense_all,
-    #     bins = {idx : cbins for idx in labels.keys()},
-    #     r_cuts0 = r_cuts
-    # )
-    # fit = fit_flowtime_and_tau_tails_with_prior(
-    #     dist = dist_binned,
-    #     data = data_binned,
-    #     excited_max = 0,
-    #     mats_max = 1,
-    # )
-    # print() ; print() ; print(fit)
+    # the whole routine
+    def fit_then_sum_procedure(ense : np.ndarray) -> Any:
+        fit, ense_binned, r_lims = iterative_fit(
+            dist         = dist,
+            ense         = ense,
+            labels       = labels,
+            reltol       = reltol,
+            sn_cut       = sn_cut_fit,
+            max_bin_size = max_bin_size,
+            ex_mats_seq  = ex_max_seq
+        )
+        tsums, psums, r_cuts_sum = sums_over_r_linear(dist, ense, labels, r_lims, fit, sn_cut_sum)
+        return fit, ense_binned, r_lims, tsums, psums, r_cuts_sum
 
 
 
-    # summing over r
-    # tsums, psums, r_cuts_sum = sums_over_r_hardcut(dist, ense_all, labels, fit, sn_cut_sum)
-    # print(tsums)
-    # print(psums[12, 6].shape, psums[12, 6].dtype)
-    # print(r_cuts_sum)
+
+
+    ###############################################################################
+    #####################  fit and sum for bootstrap samples  #####################
+    ###############################################################################
+    if 0:
+        print('starting...\n')
+
+
+        @dataclasses.dataclass
+        class FitAndSumData:
+            '''collection of data resulting from fitting and summing'''
+
+            chi2 : float
+            dof  : int
+            Q    : float
+
+            p     : gv.BufferDict
+            psums : dict[Any, np.ndarray]
+            tsums : dict[Any, float]
+
+            ense_binned : dict[Any, np.ndarray]
+            r_lims      : dict[Any, tuple[float, float]]
+            r_cuts_sum  : dict[Any, float]
 
 
 
-    # do all the plotting of tails
-    synchro = True
-    nrows = len(set().union(*(set(iflows) for _,iflows in flowtime_windows))) if synchro else max(len(iflows) for _,iflows in flowtime_windows)
-    ncols = len(flowtime_windows)
+        bootstrap_results = []
+        n_bootstrap       = 10
 
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
-    axes = np.reshape(axes, shape=(nrows, ncols))
-    
-    plot_flowtime_and_tau_fits(dist, labels, r_lims, fit, synchro, axes)
+        for i_bs, ense_bs in enumerate(gv.dataset.bootstrap_iter(ense_all, n_bootstrap)):
+            print(f'\n\n\nStarting bootstraps sample {i_bs+1}/{n_bootstrap}...\n')
+            fit, ense_binned, r_lims, tsums, psums, r_cuts_sum = fit_then_sum_procedure(ense_bs)
+            bootstrap_results.append(FitAndSumData(
+                chi2 = fit.chi2, dof = fit.dof, Q = fit.Q,
+                p = fit.p, psums = psums, tsums = tsums,
+                ense_binned = ense_binned, r_lims = r_lims, r_cuts_sum = r_cuts_sum
+            ))
 
-    fig.tight_layout()
-    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'simplot_prior.png', dpi=400)
 
 
-    # other plots
-    nrows2, ncols2 = 2, 1
-    fig2, axes2 = plt.subplots(nrows=nrows2, ncols=ncols2, figsize=(7*ncols2, 4*nrows2))
-    axes2 = np.reshape(axes2, shape=(nrows2, ncols2))
 
-    # plot_sums_over_r(tsums, axes2[0, 0], noerr=True)
 
-    plot_corr_eigenvals(ense_binned, axes2[1, 0])
 
-    fig2.tight_layout()
-    fig2.savefig(Path.cwd() / 'zeugs' / 'plots' / 'other_plots.png', dpi=400)
+
+    ###############################################################################
+    ################  fit and sum for original dataset (ense_all)  ################
+    ###############################################################################
+    if 0:
+        print('starting...\n')
+
+        fit, ense_binned, r_lims, tsums, psums, r_cuts_sum = fit_then_sum_procedure(ense_all)
+
+
+        # do all the plotting of tails
+        synchro = True
+        nrows = len(set().union(*(set(iflows) for _,iflows in flowtime_windows))) if synchro else max(len(iflows) for _,iflows in flowtime_windows)
+        ncols = len(flowtime_windows)
+
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+        axes = np.reshape(axes, shape=(nrows, ncols))
+        
+        plot_flowtime_and_tau_fits(dist, labels, r_lims, fit, synchro, axes, max_r=40, r_cuts_sum=r_cuts_sum)
+
+        fig.tight_layout()
+        fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'simplot_prior.png', dpi=400)
+
+
+        # other plots
+        nrows2, ncols2 = 2, 1
+        fig2, axes2 = plt.subplots(nrows=nrows2, ncols=ncols2, figsize=(7*ncols2, 4*nrows2))
+        axes2 = np.reshape(axes2, shape=(nrows2, ncols2))
+
+        plot_sums_over_r({(iflow, tau) : tsum for (iflow, tau), tsum in tsums.items() if tau in (5,6,7,8)}, axes2[0, 0], noerr=True)
+
+        plot_corr_eigenvals(ense_binned, axes2[1, 0])
+
+        fig2.tight_layout()
+        fig2.savefig(Path.cwd() / 'zeugs' / 'plots' / 'other_plots.png', dpi=400)
+
+
 
 
 
@@ -290,6 +331,8 @@ def main_simfit():
 
 
 main = main_simfit
+
+
 
 
 
@@ -426,27 +469,46 @@ def make_prior_mats_constr(mats : int, excited_max : int, iflowtimes : list[int]
     if excited_max > 2:
         raise Exception('Not yet implemented for excited_max > 2.')
     
-    # add distribution to reparametrize masses to enforce constraints
+    # add distribution to reparametrize masses to enforce constraint on higher matsubara mode masses
     if not gv.BufferDict.has_distribution(f'f_p{mats}'):
         gv.BufferDict.add_distribution(
             f'f_p{mats}',
             lambda x: p_mats(mats) + gv.exp(x)
         )
 
-    # now build prior
+    # gv.BufferDict instead of python dict for custom distribution support
     prior = gv.BufferDict()
-    for n_ex, m_0p in enumerate(masses_0p[:excited_max+1]):
 
-        # mass (flowtime idependent), constrained to  m >= p_mats
-        m_guess = m_mats(m_0p, mats)
-        prior[f'f_p{mats}(m_{n_ex}_{mats})'] = gv.log(gv.gvar(m_guess, m_guess*0.95) - p_mats(mats))
+    # prior for lowest mass
+    m_guess = m_mats(masses_0p[0], mats)
+    prior[f'f_p{mats}(m_0_{mats})'] = gv.log(gv.gvar(m_guess, m_guess*1) - p_mats(mats))
 
-        # amplitudes (flowtime dependent)
+    # priors for higher masses
+    for n_ex in range(1, excited_max+1):
+        dm_guess = m_mats(masses_0p[n_ex], mats) - m_mats(masses_0p[n_ex-1], mats)
+        prior[f'log(dm_{n_ex}_{mats})'] = gv.log(gv.gvar(dm_guess, dm_guess*1))
+        # prior[f'u(dm_{n_ex}_{mats})'] = gv.BufferDict.uniform('u', 0, 5)
+
+    # priors for all the amplitudes
+    for n_ex in range(excited_max+1):
         for ift in iflowtimes:
-            prior[f'a_{ift}_{n_ex}_{mats}'] = gv.gvar(-1, 100)
+            prior[f'log(a_{ift}_{n_ex}_{mats})'] = gv.log(gv.gvar(1, 50))
 
     return prior
 
+
+
+
+
+def make_prior_many_mats(excited_max : int, mats_list : list[int], iflowtimes : list[int]) -> gv.BufferDict:
+    '''...'''
+
+    prior = gv.BufferDict()
+
+    for mats in mats_list:
+        prior.update(make_prior_mats_constr(mats, excited_max, iflowtimes))
+
+    return prior
 
 
 
@@ -481,11 +543,15 @@ def expx_single_tau(x : float, p : dict, iflow : int, tau : int, ex_max : int, m
 def expx_single_mats(x : float, p : dict, iflow : int, mats : int, ex_max : int) -> float:
     '''fit function for a single matsubara mode and possibly multiple excited states'''
 
+    masses = [p[f'm_0_{mats}']]
+    for n_ex in range(1, ex_max+1):
+        masses.append(masses[-1] + p[f'dm_{n_ex}_{mats}'])
+
     return sum(
         expx(
             x / nt,
-            (nt/ns)**2 * p[f'm_{n_ex}_{mats}'] * p[f'a_{iflow}_{n_ex}_{mats}'],
-            p[f'm_{n_ex}_{mats}']
+            - (nt/ns)**2 * masses[n_ex] * p[f'a_{iflow}_{n_ex}_{mats}'],
+            masses[n_ex]
         )
         for n_ex in range(ex_max + 1)
     )
@@ -496,7 +562,8 @@ def expx_single_mats(x : float, p : dict, iflow : int, mats : int, ex_max : int)
 
 
 
-def plot_flowtime_and_tau_fits(dist : np.ndarray, labels : dict[Any, str], r_lims : dict[Any, tuple[float, float]], fit : lsqfit.nonlinear_fit, synchro : bool, axes : np.ndarray) -> None:
+def plot_flowtime_and_tau_fits( dist : np.ndarray, labels : dict[Any, str], r_lims : dict[Any, tuple[float, float]], fit : lsqfit.nonlinear_fit, synchro : bool, axes : np.ndarray,
+                                min_r : float|None = None, max_r : float|None = None, r_cuts_sum : dict[Any, float]|None = None ) -> None:
     '''plot all tails with data and fit, optionally synchro flowtimes across columns'''
 
     # map (iflow, tau) onto indices of grid of plots
@@ -509,16 +576,22 @@ def plot_flowtime_and_tau_fits(dist : np.ndarray, labels : dict[Any, str], r_lim
     for idx in labels.keys():
         iflow, tau = idx
 
-        r_left, r_right   = r_lims[idx]
-        ir_left, ir_right = index_from_distance(dist, r_left), index_from_distance(dist, r_right)
+        r_left, r_right = r_lims[idx]
         if r_right > dist[-1]:
             r_right *= 0.75 / 1.1
-            ir_right = index_from_distance(dist, r_right)
+        if max_r is not None:
+            r_right = max_r
+        if min_r is not None:
+            r_left = min_r
+        ir_left, ir_right = index_from_distance(dist, r_left), index_from_distance(dist, r_right)
 
         y_fit = fit.fcn({idx : dist[ir_left:ir_right]}, fit.p)[idx]
 
         plot_dist(fit.x[idx], fit.y[idx], axes[axes_idxs[idx]])
         plot_fitfcn(dist[ir_left:ir_right], y_fit, axes[axes_idxs[idx]])
+
+        if r_cuts_sum is not None:
+            axes[axes_idxs[idx]].axvline(x=r_cuts_sum[idx], color='black', alpha=0.5)
 
         # y_min = min(min(gv.mean(y_fit)), min(gv.mean(fit.y[idx])))
         # y_max = max(max(gv.mean(y_fit)), max(gv.mean(fit.y[idx])))
@@ -526,7 +599,7 @@ def plot_flowtime_and_tau_fits(dist : np.ndarray, labels : dict[Any, str], r_lim
         y_max = max(gv.mean(y_fit))
         y_range = y_max - y_min
         axes[axes_idxs[idx]].set_ylim(y_min - 0.1*y_range, y_max + 0.1*y_range)
-        axes[axes_idxs[idx]].set_xlim(0, r_right * 1.1)
+        axes[axes_idxs[idx]].set_xlim(0 if min_r is None else min_r, r_right)
         axes[axes_idxs[idx]].set_title(labels[idx])
 
     
@@ -538,6 +611,84 @@ def plot_flowtime_and_tau_fits(dist : np.ndarray, labels : dict[Any, str], r_lim
 ###############################################################################
 ###########################  summing over r  ##################################
 ###############################################################################
+
+
+def sums_over_r_linear(dist : np.ndarray, ense : np.ndarray, labels : dict[Any, str], r_lims : dict[Any, tuple[float, float]], fit : lsqfit.nonlinear_fit, sn_cut_right : float) -> tuple[dict, dict, dict]:
+    '''Computes partial sums, where first data, then linear interpolation of data and fit, and then fit is used.
+    Returns total sums, partial sums, r_cuts.'''
+
+    r_cuts_right = {}
+    partial_sums = {}
+    total_sums   = {}
+
+    for idx in labels.keys():
+
+        # fit function for this idx
+        fitfcn = lambda x: fit.fcn({idx : x}, fit.pmean)[idx]
+
+        # find ir_cut_left, until which only measured data is used
+        r_cut_left  = r_lims[idx][0]
+        ir_cut_left = index_from_distance(dist, r_cut_left)
+
+        # find ir_cut_right, from where on only fit data is used
+        sfit_ndata        = gv.gvar(fitfcn(fit.x[idx]), gv.sdev(fit.y[idx]))
+        ir_cut_right_bin  = signal_to_noise_cut(sfit_ndata, sn_cut_right)
+        r_cut_right       = fit.x[idx][ir_cut_right_bin]
+        r_cuts_right[idx] = r_cut_right
+        ir_cut_right      = index_from_distance(dist, r_cut_right)
+
+        if ir_cut_right <= ir_cut_left:
+            raise Exception(f'Bad r_cuts for {idx=}: {r_cut_left=} and {r_cut_right=}.')
+
+        total_sums[idx], partial_sums[idx] = sum_lin(ense[:, *idx, :], fitfcn, r_cut_left, r_cut_right, pbins=0.5)
+
+    return total_sums, partial_sums, r_cuts_right
+
+
+
+
+
+def sum_lin(ense : np.ndarray, fcn : Callable, r_left : float, r_right : float, pbinsize : float) -> tuple[float, np.ndarray]:
+    '''Computes sum of data in three parts s1, s2 and s3: s1 is only data, s2 is linear interpolation of data and fcn, and s3 is only fcn.
+    Returns: total sum, partial sums at regular intervals.'''
+
+    # prepare dist and its multiplicities
+    dist    = radial_separations(ns)
+    dr_list = radial_multiplicities_r(ns)
+
+    # indicies of left and right r cutoffs
+    ir_left  = index_from_distance(dist, r_left)
+    ir_right = index_from_distance(dist, r_right)
+
+    # segments of measured data
+    data_left = ense[:, :ir_left].mean(axis=0)
+    data_mid  = ense[:, ir_left:ir_right].mean(axis=0)
+
+    # segments of fitted data
+    fit_mid   = fcn(dist[ir_left:ir_right])
+    fit_right = fcn(dist[ir_right:])
+
+    # combine data and fit
+    ratio = (dist[ir_left:ir_right] - r_left) / (r_right - r_left)
+    data_mixed = np.concatenate((
+        data_left,
+        (1-ratio) * data_mid + ratio * fit_mid,
+        fit_right
+    ))
+
+    # multiply by radial multiplicities, then sum, then convert from T^n to T^(n-3) units
+    partial_sums_fine = np.cumsum(data_mixed * dr_list, axis=0) / nt**3
+
+    # partial sums at regular intervals
+    cbins    = find_distance_bins(dist, pbinsize)
+    cbin_ils = [il for il,_ in cbins]
+    partial_sums = partial_sums_fine[cbin_ils]
+
+    return partial_sums_fine[-1], partial_sums
+
+
+
+
 
 
 def sums_over_r_hardcut(dist : np.ndarray, ense : np.ndarray, labels : dict[Any, str], fit : lsqfit.nonlinear_fit, sn_cut : float) -> tuple[dict, dict, dict]:
@@ -594,6 +745,7 @@ def plot_sums_over_r(tsums : dict, axes : plt.Axes, noerr : bool = True) -> None
         else:                 tau_curves[tau] = [(iflow, tsum)]
 
     for tau, curve in tau_curves.items():
+        if tau == 0: continue
         curve_sorted = sorted(curve, key=lambda v: v[0])
         iflow_list = [iflow for iflow,_ in curve_sorted]
         tsum_list  = [tsum  for _,tsum  in curve_sorted]
@@ -609,7 +761,7 @@ def plot_sums_over_r(tsums : dict, axes : plt.Axes, noerr : bool = True) -> None
     axes.axvline(x=(1/4)**2, color='red',    label='8t/tau^2 = (1/4)^2', alpha=0.75)
     axes.axvline(x=(1/3)**2, color='purple', label='8t/tau^2 = (1/3)^2', alpha=0.75)
 
-    iflow_max = max(8 * flowtimes[iflow] / tau**2 for iflow,tau in tsums.keys())
+    iflow_max = max(8 * flowtimes[iflow] / tau**2 for iflow,tau in tsums.keys() if tau != 0)
     tsum_max  = min(tsums.values())
     axes.set_xlim(0, iflow_max * 1.1)
     axes.set_ylim(tsum_max * 1.2, 0)
