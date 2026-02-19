@@ -337,3 +337,37 @@ class GVarAxesAdapter:
         if name in ('xlabel', 'ylabel', 'title', 'xscale'):
             return getattr(self._ax, f'set_{name}')
         return getattr(self._ax, name)
+    
+
+
+
+def plot_distance_correlations(corrs : np.ndarray, dist : np.ndarray, rmin : float, rmax : float, axes : plt.Axes) -> None:
+    '''...'''
+
+    il = index_from_distance(dist, rmin)
+    ir = index_from_distance(dist, rmax)
+
+    data = corrs[il:ir, il:ir]
+    n_r = data.shape[0]
+
+    axes.imshow(data, cmap='coolwarm', vmin=0, vmax=1)
+
+    n_ticks = 6
+    ticks = np.linspace(0, n_r - 1, n_ticks)
+    axes.set_xticks(ticks)
+    axes.set_yticks(ticks)
+
+    labels = np.linspace(rmin, rmax, n_ticks)
+    axes.set_xticklabels([f'{x:.0f}' for x in labels])
+    axes.set_yticklabels([f'{x:.0f}' for x in labels])
+
+    axes.set_xlabel('r / a')
+    axes.set_ylabel('r / a')
+    axes.set_title('radius correlations')
+
+
+
+
+
+
+

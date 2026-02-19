@@ -499,6 +499,39 @@ def make_prior_mats_constr(mats : int, excited_max : int, iflowtimes : list[int]
 
 
 
+def make_prior_mats_uniform(mats : int, ex_max : int, iflows : list[int]) -> gv.BufferDict:
+    '''Construct prior for single Matsubara mode using only uniform distributions.'''
+
+    prior = gv.BufferDict()
+    for ex in range(ex_max+1):
+
+        if ex == 0:
+            lbound = p_mats(mats)
+            prior[f'u_0_{mats}(m_0_{mats})'] = gv.BufferDict.uniform(f'u_0_{mats}', lbound, lbound+20)
+        elif ex > 0:
+            prior[f'u_{ex}_{mats}(dm_{ex}_{mats})'] = gv.BufferDict.uniform(f'u_{ex}_{mats}', 0, 20)
+
+        for iflow in iflows:
+            prior[f'u_{iflow}_{ex}_{mats}(a_{iflow}_{ex}_{mats})'] = gv.BufferDict.uniform(f'u_{iflow}_{ex}_{mats}', 0, 100)
+
+    return prior
+
+
+
+
+
+def make_prior_uniform_many_mats(excited_max : int, mats_list : list[int], iflowtimes : list[int]) -> gv.BufferDict:
+    '''...'''
+
+    prior = gv.BufferDict()
+
+    for mats in mats_list:
+        prior.update(make_prior_mats_uniform(mats, excited_max, iflowtimes))
+
+    return prior
+
+
+
 
 def make_prior_many_mats(excited_max : int, mats_list : list[int], iflowtimes : list[int]) -> gv.BufferDict:
     '''...'''
@@ -526,6 +559,34 @@ def make_prior_constr(excited_max : int, mats_max : int, iflowtimes : list[int])
 
 
 
+def make_p0_mats(ex_max : int, mats : int, iflows : list[int]) -> dict[Any, float]:
+    '''Construct starting guesses for single matsubara modes and multiple excited states.'''
+
+    p0 = {}
+    for ex in range(ex_max+1):
+
+        if ex == 0:
+            p0[f'm_0_{mats}'] = m_mats(masses_0p[0], mats)
+        elif ex > 0:
+            p0[f'dm_{ex}_{mats}'] = m_mats(masses_0p[ex], mats) - m_mats(masses_0p[ex-1], mats)
+
+        for iflow in iflows:
+            p0[f'a_{iflow}_{ex}_{mats}'] = 1
+
+    return p0
+
+
+
+def make_p0_many_mats(ex_max : int, mats_list : list[int], iflows : list[int]) -> dict[Any, float]:
+    '''Construct starting guesses for multiple matsubara modes.'''
+
+    p0 = {}
+    for mats in mats_list:
+        p0.update(make_p0_mats(ex_max, mats, iflows))
+    return p0
+
+
+
 
 
 
@@ -550,7 +611,8 @@ def expx_single_mats(x : float, p : dict, iflow : int, mats : int, ex_max : int)
     return sum(
         expx(
             x / nt,
-            - (nt/ns)**2 * masses[n_ex] * p[f'a_{iflow}_{n_ex}_{mats}'],
+            # - (nt/ns)**2 * masses[n_ex] * p[f'a_{iflow}_{n_ex}_{mats}'],
+            - masses[n_ex] * p[f'a_{iflow}_{n_ex}_{mats}'],
             masses[n_ex]
         )
         for n_ex in range(ex_max + 1)
