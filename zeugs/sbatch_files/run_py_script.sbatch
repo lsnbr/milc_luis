@@ -1,15 +1,15 @@
 #!/bin/bash
 
 
-#SBATCH -J bs-rmin-fits
+#SBATCH -J bs-rmin-fits-ex1
 #SBATCH --mail-type=END
 #SBATCH -e /work/scratch/ln29bamu/outputs/%x.err.%j
 #SBATCH -o /work/scratch/ln29bamu/outputs/%x.out.%j
 #
 #SBATCH -N 1                 # Anzahl der Nodes
 #SBATCH -n 64                # Anzahl der Prozesse
-#SBATCH --mem-per-cpu=1G     # Hauptspeicher in MByte pro MPI-Task
-#SBATCH -t 10:00:00                # in Stunden, Minuten und Sekunden (-t 01:30:00), oder (-t 10) - nur Minuten
+#SBATCH --mem-per-cpu=2G     # Hauptspeicher in MByte pro MPI-Task
+#SBATCH -t 06:00:00                # in Stunden, Minuten und Sekunden (-t 01:30:00), oder (-t 10) - nur Minuten
 
 
 

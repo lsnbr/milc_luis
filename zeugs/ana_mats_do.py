@@ -6,6 +6,11 @@ import gvar as gv
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+# plt.rcParams.update({
+#     "text.usetex": True,
+#     "font.family": "Helvetica"
+# })
 
 from flowing import flowtime_to_radius
 from measurements import *
@@ -390,30 +395,99 @@ def mass_rmin_bs():
 
 
 
-
+# fits for subcorr-data-and-fits in section 5.6 (Subtracted correlators from data and fit)
 def fits_gs():
 
-    fss = FitSubSum(bs=False)
-    fss.iflows = [8,10,12,14]
-    print([flowtimes[ifl] for ifl in fss.iflows])
-
-    fss.do_fits_for_all_mats_manym(ex_max=0, r_min_left=[10, 7.7, 7], printfits=True)
-
-    fss.plot_mats_fits(path = Path.cwd() / 'zeugs' / 'plots' / 'mats_single_fits.png')
+    nrows, ncols = 1, 2
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 5*nrows))
+    axes = np.reshape(axes, shape=(nrows, ncols))
 
 
-    fss.do_sums_for_sub((0,1))
-    fss.do_sums_for_sub((0,1,2))
+    # ex_max=0 fit
+    fss0 = FitSubSum(bs=False)
+    fss0.iflows = [8,10,12]
+    fss0.do_fits_for_all_mats_manym(ex_max=0, r_min_left=[10, 7.7, 6.7], printfits=False)
+    fss0.plot_subtraction_fits((0,1), path=Path.cwd() / 'zeugs' / 'plots' / 'mats_sub_fits0.png', cbin_size=0.25, xlim=(3,20), ylim=(-0.2, 0.5))
 
-    fss.plot_subtraction_fits((0,1), path=Path.cwd() / 'zeugs' / 'plots' / 'mats_sub_fits.png', cbin_size=0.25, xlim=(3,25), ylim=(-0.4, 0.7))
+
+    # ex_max=1 fit
+    fss1 = FitSubSum(bs=False)
+    fss1.iflows = [8,10,12] 
+    fss1.do_fits_for_all_mats_manym(ex_max=1, r_min_left=[6.7, 6.7, 6.7], printfits=False)
+    fss1.plot_subtraction_fits((0,1), path=Path.cwd() / 'zeugs' / 'plots' / 'mats_sub_fits1.png', cbin_size=0.25, xlim=(3,20), ylim=(-0.2, 0.5))
+
+
+
+    # combined plot for sub=(0,1)
+    iflow = 12
+    sub   = (0,1)
+    ax01  = axes[0,0]
+
+    cbin_size = 0.25
+    cbins     = find_distance_bins(fss0.dist, cbin_size)
+    dist_b,   = bin_averages(cbins, fss0.dist)
+
+    ense_sub    = mats_subtraction(sub, [build_integrand(fss0.dist, fss0.ense_all[:, iflow, mats, :], mats) for mats in sub])
+    ense_sub_b, = bin_averages(cbins, ense_sub)
+    data_sub_b  = gv.dataset.avg_data(ense_sub_b)
+
+    plot_dist(dist_b, data_sub_b, ax01, color='blue', alpha=0.66, label='data', markersize=3)
+
+    for i, fss in zip((1,0), (fss1, fss0)):
+        rleft = max(fss.fitstuff_mats[mats].rlims[iflow,mats][0] for mats in sub)
+        ileft = index_from_distance(dist_b, rleft)
+        color = ['red', 'green'][i]
+        label = ['fit (one mass)', 'fit (two masses)'][i]
+        alpha = [0.7, 0.7][i]
+        plot_fitfcn(dist_b[ileft:], fss.fitfcn_sub(sub, iflow, dist_b[ileft:]), ax01, color=color, label=label, alpha=alpha)
+
+    ax01.set_xlim((3,20))
+    ax01.set_ylim((-0.12, 0.35))
+    ax01.set_ylabel('G_sub^(01) / T^7')
+
+
+
+    # combined plot for sub=(0,1,2)
+    iflow = 12
+    sub   = (0,1,2)
+    ax012 = axes[0,1]
+
+    cbin_size = 0.25
+    cbins     = find_distance_bins(fss0.dist, cbin_size)
+    dist_b,   = bin_averages(cbins, fss0.dist)
+
+    ense_sub    = mats_subtraction(sub, [build_integrand(fss0.dist, fss0.ense_all[:, iflow, mats, :], mats) for mats in sub])
+    ense_sub_b, = bin_averages(cbins, ense_sub)
+    data_sub_b  = gv.dataset.avg_data(ense_sub_b)
+
+    plot_dist(dist_b, data_sub_b, ax012, color='blue', alpha=0.66, label='data', markersize=3)
+
+    for i, fss in zip((1,0), (fss1, fss0)):
+        rleft = max(fss.fitstuff_mats[mats].rlims[iflow,mats][0] for mats in sub)
+        ileft = index_from_distance(dist_b, rleft)
+        color = ['red', 'green'][i]
+        label = ['fit (one mass)', 'fit (two masses)'][i]
+        alpha = [0.7, 0.7][i]
+        plot_fitfcn(dist_b[ileft:], fss.fitfcn_sub(sub, iflow, dist_b[ileft:]), ax012, color=color, label=label, alpha=alpha)
+
+    ax012.set_xlim((3,14))
+    ax012.set_ylim((-1, 3))
+    ax012.set_ylabel('G_sub^(012) / T^7')
+
+
+
+    fig.tight_layout()
+    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'two-fits-on-subcorr.png', dpi=400)
+
+
 
 
 
 def fits_gs_bs():
 
-    n_bs        = 100
+    n_bs        = 200
     do_comp     = True
-    pickle_path = Path('/home/ln29bamu/code/milc_luis') / 'zeugs' / 'data' / 'bs_fits_gs2.pkl'
+    pickle_path = Path('/home/ln29bamu/code/milc_luis') / 'zeugs' / 'data' / 'bs_fits_gs.pkl'
 
     iflows = [8,10,12,14]
 
@@ -545,7 +619,6 @@ def fits_gs_bs():
 def mass_rmin_manym():
 
     fss = FitSubSum(bs=False)
-    fss.r_min_left_list_mats = tuple(np.arange(5, 12+1e-6, 1/3) for _ in range(3))
 
     # decent Q's
     if 1:
@@ -592,7 +665,7 @@ def mass_rmin_manym():
     fss.do_sums_for_sub((0,1))
     fss.do_sums_for_sub((0,1,2))
 
-    fss.plot_effective_mass_curves(path = Path.cwd() / 'zeugs' / 'plots' / 'mats_eff_mass.png')
+    # fss.plot_effective_mass_curves(path = Path.cwd() / 'zeugs' / 'plots' / 'mats_eff_mass.png')
 
 
 
@@ -612,7 +685,106 @@ def mass_rmin_manym():
 
 
 def mass_rmin_manym_bs():
-    ...
+    
+    n_bs        = 200
+    do_comp     = False
+    pickle_path = Path('/home/ln29bamu/code/milc_luis') / 'zeugs' / 'data' / 'bs_rmin_fits_ex1.npy'
+
+    # decent Q's
+    if 1:
+        ex_max = 1
+        iflows = [8,10,12]
+        r_min_left = [6+2/3, 6+2/3, 6+2/3]
+
+    r_mins = np.arange(3, 10+1e-6, 1/3)
+
+
+
+    if do_comp:
+        # bs, ex, mats, rmin
+        fit_masses = np.zeros(shape=(n_bs, ex_max+1, 3, len(r_mins)), dtype=float)
+
+        for i_bs in range(n_bs):
+            print(f'bootstrap sample {i_bs+1}/{n_bs}...')
+
+            fss = FitSubSum(bs=True)
+            fss.iflows = iflows
+            fss.r_min_left_list_mats = tuple(r_mins for _ in range(3))
+
+            res = fss.do_fits_for_many_r_min_lefts_for_all_mats('var', ex_max)
+
+            for ex in range(ex_max+1):
+                for mats in (0,1,2):
+                    for irmin in range(len(r_mins)):
+                        fit_masses[i_bs, ex, mats, irmin] = res[mats][irmin].fit.pmean[('m' if ex==0 else 'dm') + f'_{ex}_{mats}']
+
+            np.save(pickle_path, fit_masses[:i_bs+1])
+
+
+
+    else:
+        fit_masses = np.load(pickle_path)
+
+
+
+    print(fit_masses.shape, fit_masses.dtype)
+    masses_data = gv.dataset.avg_data(fit_masses, bstrap=True)
+    print(masses_data.shape, masses_data.dtype)
+
+
+
+    nrows, ncols = 1, 3
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+    axes = np.reshape(axes, shape=(nrows, ncols))
+
+
+    for mats in (0,1,2):
+        for ex in range(ex_max+1):
+            axes[0,mats].errorbar(
+                x    = r_mins,
+                y    = gv.mean(masses_data[ex, mats, :]),
+                yerr = gv.sdev(masses_data[ex, mats, :]),
+                marker    = 'o',
+                linestyle = '--' ,
+                label = ('m' if ex==0 else 'dm') + f'_{ex}_{mats}'
+            )
+        axes[0,mats].set_xlim([(2.9,10.1),(2.9,9.1),(2.9,7.4)][mats])
+        axes[0,mats].set_xlabel('r_min / a')
+        axes[0,mats].set_ylabel(f'(d)m / T')
+        axes[0,mats].legend()
+
+
+
+    # do Q values
+    if 1:
+
+        fss = FitSubSum(bs=False)
+        fss.iflows = iflows
+        fss.r_min_left_list_mats = tuple(r_mins for _ in range(3))
+
+        res = fss.do_fits_for_many_r_min_lefts_for_all_mats('var', ex_max)
+
+        for mats in (0,1,2):
+            ax = axes[0,mats]
+            ax_twin = ax.twinx()
+            ax_twin.plot(
+                r_mins,
+                [fitstuff.fit.Q for fitstuff in res[mats]],
+                marker    = 's',
+                linestyle = '-',
+                alpha     = 0.5,
+                label     = 'Q',
+            )
+            ax_twin.set_ylabel('Q')
+            ax_twin.set_ylim(0, 1)
+
+            lines1, labels1 = ax.get_legend_handles_labels()
+            lines2, labels2 = ax_twin.get_legend_handles_labels()
+            ax.legend(lines1 + lines2, labels1 + labels2, loc='best')
+
+
+    fig.tight_layout()
+    fig.savefig(Path('/home/ln29bamu/code/milc_luis') / 'zeugs' / 'plots' / 'bootstrap_rmin_fits_ex1.png', dpi=400)
 
 
 
@@ -634,6 +806,16 @@ def fits_manym():
         ex_max = 1
         fss.iflows = [8,10,12,14]
         r_min_left = [6+2/3, 6+2/3, 6+2/3]
+    # 2 excited states (shouldnt change much)
+    if 0:
+        ex_max = 2
+        fss.iflows = [8,10,12]
+        r_min_left = [6+2/3, 6+2/3, 6+2/3]
+    # push rmin lower
+    if 0:
+        ex_max = 1
+        fss.iflows = [8,10,12]
+        r_min_left = [6+1/3, 6+1/3, 6+1/3]
 
 
 
@@ -667,30 +849,73 @@ def fits_manym():
 
 def fits_manym_bs():
 
-    n_bs        = 200
+    n_bs        = 100
     do_comp     = False
     pickle_path = Path('/home/ln29bamu/code/milc_luis') / 'zeugs' / 'data' / 'bs_fits_ex.pkl'
 
+
+    restart = False
+    # bs_data[name] = bs -> ( (sub,ifl) -> tsum,  (sub,ifl) -> psums,
+    #                         (sub,ifl) -> rleft, (sub,ifl) -> rright,
+    #                         mats -> pmean )
+
+    if (not do_comp) or (not restart and pickle_path.exists()):
+        with open(pickle_path, 'rb') as f:
+            bs_data = pickle.load(f)
+    else:
+        bs_data = {}
+
+
     # decent Q's
     if 0:
-        ex_max = 1
-        iflows = [8,10,12]
+        name       = 'flow3'
+        ex_max     = 1
+        iflows     = [8,10,12]
         r_min_left = [6+2/3, 6+2/3, 6+2/3]
     # add iflow 14
-    if 1:
-        ex_max = 1
-        iflows = [8,10,12,14]
+    if 0:
+        name       = 'flow4'
+        ex_max     = 1
+        iflows     = [8,10,12,14]
         r_min_left = [6+2/3, 6+2/3, 6+2/3]
+    # add iflow 14 and 16
+    if 0:
+        name       = 'flow5'
+        ex_max     = 1
+        iflows     = [8,10,12,14,16]
+        r_min_left = [6+2/3, 6+2/3, 6+2/3]
+    # 2 excited states
+    if 0:
+        name       = 'ex2'
+        ex_max     = 2
+        iflows     = [8,10,12,14]
+        r_min_left = [6+2/3, 6+2/3, 6+2/3]
+    # lower rmin
+    if 0:
+        name       = 'rmin6p3'
+        ex_max     = 1
+        iflows     = [8,10,12,14]
+        r_min_left = [6+1/3, 6+1/3, 6+1/3]
+    # even lower rmin
+    if 0:
+        name       = 'rmin6p0'
+        ex_max     = 1
+        iflows     = [8,10,12,14]
+        r_min_left = [6, 6, 6]
+    # only ground state
+    if 1:
+        name       = 'gs'
+        ex_max     = 0
+        iflows     = [8,10,12,14]
+        r_min_left = [10, 7.7, 6.7]
 
 
 
     if do_comp:
 
-        # bs, mats -> pmean
-        fit_pmean_bs = np.zeros(shape=(n_bs, 3), dtype=object)
-        # bs -> (sub -> sums)
-        tsums_bs = []
-        psums_bs = []
+        if name not in bs_data:
+            bs_data[name] = []
+
 
         for i_bs in range(n_bs):
             print(f'bootstrap sample {i_bs+1}/{n_bs}...')
@@ -700,114 +925,232 @@ def fits_manym_bs():
 
             fss.do_fits_for_all_mats_manym(ex_max, r_min_left, printfits=False)
 
-            for mats in (0,1,2):
-                fit_pmean_bs[i_bs, mats] = fss.fitstuff_mats[mats].fit.pmean
+            pmeans = [fss.fitstuff_mats[mats].fit.pmean for mats in (0,1,2)]
 
             fss.do_sums_for_sub((0,1))
             fss.do_sums_for_sub((0,1,2))
 
-            tsums_bs.append(fss.tsums_sub)
-            psums_bs.append(fss.psums_sub)
+            bs_data[name].append((fss.tsums_sub, fss.psums_sub, fss.rleft_sub, fss.rright_sub, pmeans))
 
             with pickle_path.open('wb') as f:
-                pickle.dump((fit_pmean_bs[:i_bs+1], tsums_bs, psums_bs), f)
+                pickle.dump(bs_data, f)
 
 
-    else:
-        with open(pickle_path, 'rb') as f:
-            fit_pmean_bs, tsums_bs, psums_bs = pickle.load(f)
+    print()
+    print([(nm, len(bs)) for nm, bs in bs_data.items()])
+    print()
 
 
 
     # fit parameters
     ####################################
+    if 0:
 
-    print()
-    print(fit_pmean_bs.shape, fit_pmean_bs.dtype)
-    masses_ense = np.array(
-        [ [[fit_pmean_bs[i_bs, mats][('m' if ex==0 else 'dm') + f'_{ex}_{mats}'] for ex in range(ex_max+1)] for mats in (0,1,2)]
-          for i_bs in range(n_bs) ],
-        dtype=float
-    )
-    print(masses_ense.shape, masses_ense.dtype)
-    masses_data = gv.dataset.avg_data(masses_ense, bstrap=True)
-    print(masses_data.shape, masses_data.dtype)
-    print(masses_data)
+        for nm in bs_data.keys():
 
-    print()
+            ex_maxes = {'flow3' : 1, 'flow4' : 1, 'flow5' : 1, 'rmin6p3' : 1, 'rmin6p0' : 1, 'ex2' : 2, 'gs' : 0}
 
-    # a_ense = np.array(
-    #     [ [[fit_pmean_bs[i_bs, mats][f'a_{ifl}_0_{mats}'] for ifl in iflows] for mats in (0,1,2)]
-    #       for i_bs in range(n_bs) ],
-    #       dtype=float
-    # )
-    # print(a_ense.shape, a_ense.dtype)
-    # a_data = gv.dataset.avg_data(a_ense, bstrap=True)
-    # print(a_data.shape, a_data.dtype)
-    # print(a_data)
+            print()
+            print(nm)
+            masses_ense = np.array(
+                [ [ [pmeans[mats][('m' if ex==0 else 'dm') + f'_{ex}_{mats}'] for ex in range(ex_maxes[nm]+1)]
+                    for mats in (0,1,2) ]
+                for _,_,_,_,pmeans in bs_data[nm] ],
+                dtype=float
+            )
+            print(masses_ense.shape, masses_ense.dtype)
+            masses_data = gv.dataset.avg_data(masses_ense, bstrap=True)
+            print(masses_data.shape, masses_data.dtype)
+            print(masses_data)
 
-    # print()
+        print()
+
+        # a_ense = np.array(
+        #     [ [[fit_pmean_bs[i_bs, mats][f'a_{ifl}_0_{mats}'] for ifl in iflows] for mats in (0,1,2)]
+        #       for i_bs in range(n_bs) ],
+        #       dtype=float
+        # )
+        # print(a_ense.shape, a_ense.dtype)
+        # a_data = gv.dataset.avg_data(a_ense, bstrap=True)
+        # print(a_data.shape, a_data.dtype)
+        # print(a_data)
+
+        # print()
 
 
 
     # total and partial sums
     ###############################################
+    if 0:
 
-    print(len(tsums_bs), len(psums_bs))
-
-    nrows, ncols = len(iflows), 3*2
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
-    axes = np.reshape(axes, shape=(nrows, ncols))
-
-
-
-    for isub, sub in enumerate([(0,1), (0,1,2)]):
-        print('isub,sub =', isub, sub)
-
-        tsums_bsense = { iflow : np.array([tsum[sub, iflow] for tsum in tsums_bs])
-                        for iflow in iflows }
-        psums_bsense = { iflow : np.array([psum[sub, iflow] for psum in psums_bs])
-                        for iflow in iflows }
-        
-        tsums_data = gv.dataset.avg_data(tsums_bsense, bstrap=True)
-        print(tsums_data)
-        psums_data = gv.dataset.avg_data(psums_bsense, bstrap=True)
-
-
-        # plotting stuff
-        #######################
-
-        distb = bin_distances(ns, 0.5)
-
-        for iiflow, iflow in enumerate(iflows):
-            axes[iiflow,3*isub].hist(tsums_bsense[iflow], bins=20)
-            axes[iiflow,3*isub].set_title(f'flowtime = {flowtimes[iflow]:.2} a^2')
-            plot_dist(distb, psums_data[iflow], axes[iiflow,3*isub+1])
-            axes[iiflow,3*isub+1].set_xlim(0, 30)
-
-
-        # plot final tsums
-        x_list = flowtimes[iflows]
-        y_list = [tsums_data[iflow] for iflow in iflows]
-        axes[0,3*isub+2].errorbar(
-            x=x_list, y=gv.mean(y_list), yerr=gv.sdev(y_list),
-            marker='o', linestyle='none'    
-        )
-        axes[0,3*isub+2].set_xlabel('flowtime t / a^2')
-        axes[0,3*isub+2].set_ylabel('sum over r')
-        axes[0,3*isub+2].set_xlim(0, max(x_list) * 1.1)
-        axes[0,3*isub+2].set_ylim(min(y.mean - y.sdev for y in y_list) * 1.1, 0)
-
-        # correlation between tsums (and plot tsums with error)
-        tsums_corr = gv.evalcorr([tsums_data[iflow] for iflow in iflows])
-        im = axes[1,3*isub+2].imshow(tsums_corr, vmin=0, vmax=1)
-        cbar = plt.colorbar(im, ax=axes[1,3*isub+2])
-        axes[1,3*isub+2].set_title('correlation of sums in flowtime')
+        nrows, ncols = len(iflows), 3*2
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+        axes = np.reshape(axes, shape=(nrows, ncols))
 
 
 
-    fig.tight_layout()
-    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'mats_bootstrap_ex1.png', dpi=400)
+        for isub, sub in enumerate([(0,1), (0,1,2)]):
+            print('isub,sub =', isub, sub)
+
+            tsums_bsense = { iflow : np.array([tsum[sub, iflow] for tsum,_,_,_,_ in bs_data[name]])
+                            for iflow in iflows }
+            psums_bsense = { iflow : np.array([psum[sub, iflow] for _,psum,_,_,_ in bs_data[name]])
+                            for iflow in iflows }
+            
+            tsums_data = gv.dataset.avg_data(tsums_bsense, bstrap=True)
+            print(tsums_data)
+            psums_data = gv.dataset.avg_data(psums_bsense, bstrap=True)
+
+
+            # plotting stuff
+            #######################
+
+            distb = bin_distances(ns, 0.5)
+
+            for iiflow, iflow in enumerate(iflows):
+                axes[iiflow,3*isub].hist(tsums_bsense[iflow], bins=20)
+                axes[iiflow,3*isub].set_title(f'flowtime = {flowtimes[iflow]:.2} a^2')
+
+                plot_dist(distb, psums_data[iflow], axes[iiflow,3*isub+1])
+                axes[iiflow,3*isub+1].set_xlim(0, 17)
+
+                rleft = gv.dataset.avg_data(np.array([ll[sub, iflow] for _,_,ll,_,_ in bs_data[name]]))
+                axes[iiflow,3*isub+1].axvline(rleft.mean, linewidth=2, alpha=0.8, color='grey')
+                axes[iiflow,3*isub+1].axvspan(rleft.mean - rleft.sdev, rleft.mean + rleft.sdev, alpha=0.3, color='grey')
+
+                rright = gv.dataset.avg_data(np.array([rr[sub, iflow] for _,_,_,rr,_ in bs_data[name]]))
+                axes[iiflow,3*isub+1].axvline(rright.mean, linewidth=2, alpha=0.8, color='grey')
+                axes[iiflow,3*isub+1].axvspan(rright.mean - rright.sdev, rright.mean + rright.sdev, alpha=0.5, color='grey')
+
+
+            # plot final tsums
+            x_list = flowtimes[iflows]
+            y_list = [tsums_data[iflow] for iflow in iflows]
+            axes[0,3*isub+2].errorbar(
+                x=x_list, y=gv.mean(y_list), yerr=gv.sdev(y_list),
+                marker='o', linestyle='none'    
+            )
+            axes[0,3*isub+2].set_xlabel('flowtime t / a^2')
+            axes[0,3*isub+2].set_ylabel('sum over r')
+            axes[0,3*isub+2].set_xlim(0, max(x_list) * 1.1)
+            axes[0,3*isub+2].set_ylim(min(y.mean - y.sdev for y in y_list) * 1.1, 0)
+
+            # correlation between tsums (and plot tsums with error)
+            tsums_corr = gv.evalcorr([tsums_data[iflow] for iflow in iflows])
+            im = axes[1,3*isub+2].imshow(tsums_corr, vmin=0, vmax=1)
+            cbar = plt.colorbar(im, ax=axes[1,3*isub+2])
+            axes[1,3*isub+2].set_title('correlation of sums in flowtime')
+
+
+
+        fig.tight_layout()
+        fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'mats_bootstrap_ex1.png', dpi=400)
+
+
+
+    # figure comparing gs and ex1 fits
+    ###############################################
+    if 0:
+
+        nrows, ncols = 1, 2
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 5*nrows))
+        axes = np.reshape(axes, shape=(nrows, ncols))
+
+        names = ['gs', 'flow4']
+        subs  = [(0,1), (0,1,2)]
+
+
+        for isub, sub in enumerate(subs):
+
+            for iname, name in enumerate(names):
+
+                iflows = [[8,10,12,14], [8,10,12,14]][iname]
+                x_list = [flt + iname*0.01 for flt in flowtimes[iflows]]
+                
+                tsums_ense = { iflow : np.array([tsum[sub, iflow] for tsum,_,_,_,_ in bs_data[name]])
+                            for iflow in iflows }
+                tsums_data = gv.dataset.avg_data(tsums_ense, bstrap=True)
+                y_list = [tsums_data[ifl] for ifl in iflows]
+
+                label = ['fit (one mass)', 'fit (two masses)'][iname]
+                axes[0,isub].errorbar(
+                    x=x_list, y=gv.mean(y_list), yerr=gv.sdev(y_list),
+                    marker='o', linestyle='none', label=label,
+                )
+
+            axes[0,isub].set_xlabel('flowtime t / a^2')
+            axes[0,isub].set_ylabel(f'H{sub} / T^4')
+            axes[0,isub].set_xlim(0, max(x_list) * 1.1)
+            axes[0,isub].set_ylim(min(y.mean - y.sdev for y in y_list) * 1.1, 0)
+            axes[0,isub].legend()
+
+
+        fig.tight_layout()
+        fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'subcorr-comp-gs-ex1.png', dpi=400)
+
+
+
+    # figure comparing gs and ex1 fits
+    ###############################################
+    if 1:
+
+        nrows, ncols = 1, 2
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 5*nrows))
+        axes = np.reshape(axes, shape=(nrows, ncols))
+
+        names = ['flow3', 'flow4', 'flow5', 'ex2', 'rmin6p3']
+        subs  = [(0,1), (0,1,2)]
+
+        cmap = matplotlib.colormaps['plasma']
+        flow_colors = [cmap(v) for v in np.linspace(0, 0.4, 3)]
+        extra_colors = ['mediumseagreen', 'darkturquoise']
+        all_colors = flow_colors + extra_colors
+
+
+
+        for isub, sub in enumerate(subs):
+
+            for iname, name in enumerate(names):
+
+                iflows = [[8,10,12], [8,10,12,14], [8,10,12,14,16], [8,10,12,14], [8,10,12,14]][iname]
+                x_list = [flt + iname*0.01 for flt in flowtimes[iflows]]
+                
+                tsums_ense = { iflow : np.array([tsum[sub, iflow] for tsum,_,_,_,_ in bs_data[name]])
+                            for iflow in iflows }
+                tsums_data = gv.dataset.avg_data(tsums_ense, bstrap=True)
+                y_list = [tsums_data[ifl] for ifl in iflows]
+
+                axes[0,isub].errorbar(
+                    x=x_list, y=gv.mean(y_list), yerr=gv.sdev(y_list),
+                    marker    = 'o',
+                    linestyle = 'none',
+                    color     = all_colors[iname],
+                    label     = ['fit (3 flowtimes)', 'fit (4 flowtimes)', 'fit (5 flowtimes)', 'fit (3 masses)', 'fit (r0 = 6.3)'][iname],
+                )
+
+            axes[0,isub].set_xlabel('flowtime t / a^2')
+            axes[0,isub].set_ylabel(f'H{sub} / T^4')
+            axes[0,isub].set_xlim(0, flowtimes[16] * 1.1)
+            axes[0,isub].set_ylim(min(y.mean - y.sdev for y in y_list) * 1.1, 0)
+            
+            handles, labels = axes[0,isub].get_legend_handles_labels()
+
+            flow_handles  = handles[:3]
+            flow_labels   = labels[:3]
+            extra_handles = handles[3:]
+            extra_labels  = labels[3:]
+
+            separator = mlines.Line2D([], [], linestyle='none', label='')
+
+            axes[0,isub].legend(
+                flow_handles + [separator] + extra_handles,
+                flow_labels  + ['']        + extra_labels,
+                frameon=True
+            )
+
+
+        fig.tight_layout()
+        fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'subcorr-comp-various.png', dpi=400)
 
 
 
@@ -820,7 +1163,10 @@ def fits_manym_bs():
 
 
 
-main = fits_manym_bs
+
+
+
+main = fits_gs
 
 
 

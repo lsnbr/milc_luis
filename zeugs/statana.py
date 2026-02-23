@@ -301,16 +301,21 @@ def plot_dist(dist : np.ndarray, data : np.ndarray, axes : plt.Axes, **plt_args 
 
 
 
-def plot_fitfcn(dist : np.ndarray, data : np.ndarray, axes : plt.Axes) -> None:
+def plot_fitfcn(dist : np.ndarray, data : np.ndarray, axes : plt.Axes, **plt_args : Any) -> None:
     '''plot function with error bands'''
+
+    if plt_args is None: plt_args = {}
+    plt_default = { 'color' : 'red',
+                    'alpha' : 0.5,
+                    'label' : 'fit' }
+    for kw, val in plt_default.items():
+        if kw not in plt_args: plt_args[kw] = val
 
     axes.fill_between(
         x  = dist,
         y1 = gv.mean(data) - gv.sdev(data),
         y2 = gv.mean(data) + gv.sdev(data),
-        color = 'red',
-        alpha = 0.5,
-        label = 'fit',
+        **plt_args
     )
     axes.legend()
 
