@@ -7,10 +7,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
-# plt.rcParams.update({
-#     "text.usetex": True,
-#     "font.family": "Helvetica"
-# })
+from matplotlib.ticker import MultipleLocator
+
+import scienceplots
+plt.style.use('science')
+plt.rcParams.update({
+    'font.size' : 10,
+})
 
 from flowing import flowtime_to_radius
 from measurements import *
@@ -26,6 +29,10 @@ ns = data_ense['ns']
 flowtimes = data_ense['flowtimes']
 
 
+
+
+latex_width_pts = 469.75502
+wlatex = 6.5243753
 
 
 
@@ -146,6 +153,30 @@ def main_visdata():
     # finalize and save plots
     fig.tight_layout()
     fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'gridmats.png', dpi=400)
+
+
+
+
+
+# for the plot showing correlatios in r. between matsubara modes, and in t
+def vis_correlations():
+
+    nrows, ncols = 1, 3
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+    axes = np.reshape(axes, shape=(nrows, ncols))
+
+
+    # get correlators  G(w_n, r) / T^7
+    print('loading correlator data...')
+    ense_all = get_data_mats_unbinned()
+    print(ense_all.shape, ense_all.dtype)
+
+    # get distances
+    dist = radial_separations(ns)
+
+
+
+    # correlations in distance
 
 
 
@@ -321,11 +352,12 @@ def mass_rmin():
 
 
 
+# creation of plot of  m over r_0  fit for one-mass fit
 def mass_rmin_bs():
 
     n_bs        = 100
     do_comp     = False
-    pickle_path = Path('/home/ln29bamu/code/milc_luis') / 'zeugs' / 'data' / 'bs_rmin_fits.npy'
+    pickle_path = Path.cwd() / 'zeugs' / 'data' / 'bs_rmin_fits.npy'
 
     iflows = [8,10,12,14]
     r_mins = np.arange(5, 12+1e-6, 1/3)
@@ -371,25 +403,37 @@ def mass_rmin_bs():
 
 
     nrows, ncols = 1, 3
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(wlatex, wlatex/ncols*0.99))
     axes = np.reshape(axes, shape=(nrows, ncols))
 
 
     for mats in (0,1,2):
-        axes[0,mats].errorbar(
+        ax = axes[0,mats]
+        ax.errorbar(
             x    = r_mins,
             y    = gv.mean(masses_data[mats, :]),
             yerr = gv.sdev(masses_data[mats, :]),
-            marker    = 'o',
-            linestyle = 'none' 
+            marker     = 'o',
+            markersize = 4,
+            linestyle  = 'none' 
         )
-        axes[0,mats].set_xlim([(4.9,12.1),(4.9,10.1),(4.9,7.4)][mats])
-        axes[0,mats].set_xlabel('r_min / a')
-        axes[0,mats].set_ylabel(f'm_0 T (Matsubara mode {mats})')
+        ax.set_xlim([(4.9,12.1),(4.9,10.1),(4.9,7.4)][mats])
+        ax.set_ylim([(4.5,13.9),(8,21),(12,26)][mats])
+        ax.set_xlabel(r'$r_0 / a$')
+        ax.set_ylabel(None)
+        ax.text(
+            0.05, 0.95,
+            rf'$m_{mats} / T$',# + f' (mode {mats})',
+            transform=ax.transAxes,
+            ha="left",
+            va="top"
+        )
 
 
-    fig.tight_layout()
-    fig.savefig(Path('/home/ln29bamu/code/milc_luis') / 'zeugs' / 'plots' / 'bootstrap_rmin_fits.png', dpi=400)
+    fig.tight_layout(w_pad=0.5)
+    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'bootstrap_rmin_fits.pdf', dpi=400)
+
+
 
 
 
@@ -399,7 +443,7 @@ def mass_rmin_bs():
 def fits_gs():
 
     nrows, ncols = 1, 2
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 5*nrows))
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(wlatex, wlatex/ncols*0.8))
     axes = np.reshape(axes, shape=(nrows, ncols))
 
 
@@ -407,14 +451,14 @@ def fits_gs():
     fss0 = FitSubSum(bs=False)
     fss0.iflows = [8,10,12]
     fss0.do_fits_for_all_mats_manym(ex_max=0, r_min_left=[10, 7.7, 6.7], printfits=False)
-    fss0.plot_subtraction_fits((0,1), path=Path.cwd() / 'zeugs' / 'plots' / 'mats_sub_fits0.png', cbin_size=0.25, xlim=(3,20), ylim=(-0.2, 0.5))
+    # fss0.plot_subtraction_fits((0,1), path=Path.cwd() / 'zeugs' / 'plots' / 'mats_sub_fits0.png', cbin_size=0.25, xlim=(3,20), ylim=(-0.2, 0.5))
 
 
     # ex_max=1 fit
     fss1 = FitSubSum(bs=False)
     fss1.iflows = [8,10,12] 
     fss1.do_fits_for_all_mats_manym(ex_max=1, r_min_left=[6.7, 6.7, 6.7], printfits=False)
-    fss1.plot_subtraction_fits((0,1), path=Path.cwd() / 'zeugs' / 'plots' / 'mats_sub_fits1.png', cbin_size=0.25, xlim=(3,20), ylim=(-0.2, 0.5))
+    # fss1.plot_subtraction_fits((0,1), path=Path.cwd() / 'zeugs' / 'plots' / 'mats_sub_fits1.png', cbin_size=0.25, xlim=(3,20), ylim=(-0.2, 0.5))
 
 
 
@@ -431,19 +475,19 @@ def fits_gs():
     ense_sub_b, = bin_averages(cbins, ense_sub)
     data_sub_b  = gv.dataset.avg_data(ense_sub_b)
 
-    plot_dist(dist_b, data_sub_b, ax01, color='blue', alpha=0.66, label='data', markersize=3)
+    plot_dist(dist_b, data_sub_b, ax01, color='blue', alpha=0.5, label='data', markersize=3)
 
     for i, fss in zip((1,0), (fss1, fss0)):
         rleft = max(fss.fitstuff_mats[mats].rlims[iflow,mats][0] for mats in sub)
         ileft = index_from_distance(dist_b, rleft)
         color = ['red', 'green'][i]
         label = ['fit (one mass)', 'fit (two masses)'][i]
-        alpha = [0.7, 0.7][i]
+        alpha = [0.8, 1][i]
         plot_fitfcn(dist_b[ileft:], fss.fitfcn_sub(sub, iflow, dist_b[ileft:]), ax01, color=color, label=label, alpha=alpha)
 
-    ax01.set_xlim((3,20))
-    ax01.set_ylim((-0.12, 0.35))
-    ax01.set_ylabel('G_sub^(01) / T^7')
+    ax01.set_xlim((3,17))
+    ax01.set_ylim((-0.12, 0.39))
+    # ax01.set_ylabel(r'$f^{(0,1)}(r) / T^7$')
 
 
 
@@ -460,24 +504,46 @@ def fits_gs():
     ense_sub_b, = bin_averages(cbins, ense_sub)
     data_sub_b  = gv.dataset.avg_data(ense_sub_b)
 
-    plot_dist(dist_b, data_sub_b, ax012, color='blue', alpha=0.66, label='data', markersize=3)
+    plot_dist(dist_b, data_sub_b, ax012, color='blue', alpha=0.5, label='data', markersize=3)
 
     for i, fss in zip((1,0), (fss1, fss0)):
         rleft = max(fss.fitstuff_mats[mats].rlims[iflow,mats][0] for mats in sub)
         ileft = index_from_distance(dist_b, rleft)
         color = ['red', 'green'][i]
         label = ['fit (one mass)', 'fit (two masses)'][i]
-        alpha = [0.7, 0.7][i]
+        alpha = [0.8, 1][i]
         plot_fitfcn(dist_b[ileft:], fss.fitfcn_sub(sub, iflow, dist_b[ileft:]), ax012, color=color, label=label, alpha=alpha)
 
-    ax012.set_xlim((3,14))
-    ax012.set_ylim((-1, 3))
-    ax012.set_ylabel('G_sub^(012) / T^7')
+    ax012.set_xlim((3,12))
+    ax012.set_ylim((-0.8, 2.4))
+    # ax012.set_ylabel(r'$f^{(0,1,2)}(r) / T^7$')
 
 
 
-    fig.tight_layout()
-    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'two-fits-on-subcorr.png', dpi=400)
+    for iax, ax in enumerate(axes.flat):
+        ax.tick_params(direction="in", top=True, right=True)
+        ax.xaxis.set_major_locator(MultipleLocator(2))
+        ax.set_xlim((3,15))
+        ax.set_ylabel(None)
+        ax.text(
+            0.05, 0.95,
+            r'$f^{(0,1)}(r) / T^7$' if iax==0 else r'$f^{(0,1,2)}(r) / T^7$',
+            transform=ax.transAxes,
+            ha="left",
+            va="top"
+        )
+        handles, labels = ax.get_legend_handles_labels()
+        order = [2, 1, 0]
+        ax.legend(
+            [handles[i] for i in order], [labels[i] for i in order],
+            loc='upper right',
+            frameon=True, facecolor="white", edgecolor="none", framealpha=0.95,
+        )
+
+
+
+    fig.tight_layout(w_pad=0.5)
+    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'two-fits-on-subcorr.pdf', dpi=400)
 
 
 
@@ -615,29 +681,37 @@ def fits_gs_bs():
 
 
 
-
+# creation of figures for one- and two-mass fits and their plots (including data and fit for mats=0,1,2)
 def mass_rmin_manym():
 
-    fss = FitSubSum(bs=False)
-
     # decent Q's
-    if 1:
-        ex_max = 1
-        fss.iflows = [8,10,12]
+    if 0:
+        name       = 'flow3'
+        ex_max     = 1
+        iflows     = [8,10,12]
         r_min_left = [6+2/3, 6+2/3, 6+2/3]
-    # 2 excited states (shouldnt change much)
-    if 0:
-        ...
-    # push rmin lower
-    if 0:
-        ...
     # add iflow 14
-    if 0:
-        ...
-
-
-
+    # used for Fig of fits for two-mass fit
     if 1:
+        name       = 'flow4'
+        ex_max     = 1
+        iflows     = [8,10,12,14]
+        r_min_left = [6+2/3, 6+2/3, 6+2/3]
+    # only ground state
+    # used for Fig of fits for one-mass fit
+    if 0:
+        name       = 'gs'
+        ex_max     = 0
+        iflows     = [8,10,12,14]
+        r_min_left = [10, 7.7, 6.7]
+        
+
+    fss = FitSubSum(bs=False)
+    fss.iflows = iflows
+
+
+
+    if 0:
 
         nrows1, ncols1 = 1, 3
         fig1, axes1 = plt.subplots(nrows=nrows1, ncols=ncols1, figsize=(7*ncols1, 4*nrows1))
@@ -656,39 +730,81 @@ def mass_rmin_manym():
 
 
 
-    # r_min_left = [7, 6+2/3, 6+2/3]
-
-    fss.do_fits_for_all_mats_manym(ex_max, r_min_left, printfits=True)
-
-    fss.plot_mats_fits(path = Path.cwd() / 'zeugs' / 'plots' / 'mats_single_fits.png')
-
-    fss.do_sums_for_sub((0,1))
-    fss.do_sums_for_sub((0,1,2))
-
-    # fss.plot_effective_mass_curves(path = Path.cwd() / 'zeugs' / 'plots' / 'mats_eff_mass.png')
-
-
-
-    nrows2, ncols2 = len(fss.iflows), 4
-    fig2, axes2 = plt.subplots(nrows=nrows2, ncols=ncols2, figsize=(7*ncols2, 4*nrows2))
-    axes2 = np.reshape(axes2, shape=(nrows2, ncols2))
     
-    fss.plot_subtraction_fits((0,1),   axes=axes2[:,0])
-    fss.plot_subtraction_fits((0,1,2), axes=axes2[:,2])
 
-    fss.plot_partial_sums((0,1),   axes=axes2[:,1])
-    fss.plot_partial_sums((0,1,2), axes=axes2[:,3])
-
-    fig2.tight_layout()
-    fig2.savefig(Path.cwd() / 'zeugs' / 'plots' / 'mats_sub_fits_sums.png', dpi=400)
+    fss.do_fits_for_all_mats_manym(ex_max, r_min_left, printfits=False)
 
 
+    nrows, ncols = 1, 3
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(wlatex, wlatex/ncols*0.99))
+    axes = np.reshape(axes, shape=(nrows, ncols))
 
+
+    ifl = 12
+    for mats in (0,1,2):
+        ax = axes[0,mats]
+
+        r_left, r_right = fss.fitstuff_mats[mats].rlims[ifl,mats]
+        ir_left, ir_right = index_from_distance(fss.dist, r_left), index_from_distance(fss.dist, r_right)
+
+        plot_dist(fss.fitstuff_mats[mats].fit.x[ifl,mats], fss.fitstuff_mats[mats].fit.y[ifl,mats], ax, label=f'data (n={mats})', alpha=0.7)
+        plot_fitfcn(fss.dist[ir_left:ir_right], fss.fitfcn_mats(ifl, mats, fss.dist[ir_left:ir_right]), ax, label=f'fit (n={mats})')
+
+        ax.set_xlabel(r'$r / a$')
+        ax.set_xlim({
+            'gs'    : [(9,23), (7,20), (6.2,15)],
+            'flow4' : [(5,19), (5,16), (6,12)],
+        }[name][mats])
+
+        ax.set_ylim({
+            'gs'    : [(-0.026,0.0025), (-0.038,0.0025), (-0.025,0.0025)],
+            'flow4' : [(-0.25,0.02), (-0.11, 0.01), (-0.025, 0.002)],
+        }[name][mats])
+        ax.set_ylabel(None)
+        if mats==0:
+            ax.text(0.05, 0.95, r'$G / T^7$', transform=ax.transAxes, ha="left", va="top")
+
+        # ax.tick_params(axis="y", direction="in", pad=-18-11, right=True, labelright=False)
+
+        ax.legend(loc='lower right')
+
+
+
+    fig.tight_layout(w_pad=0.1)
+    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'mats_fits_ex1.pdf', dpi=400)
+
+
+
+
+
+    if 0:
+
+        fss.do_sums_for_sub((0,1))
+        fss.do_sums_for_sub((0,1,2))
+        # fss.plot_effective_mass_curves(path = Path.cwd() / 'zeugs' / 'plots' / 'mats_eff_mass.png')
+
+        nrows2, ncols2 = len(fss.iflows), 4
+        fig2, axes2 = plt.subplots(nrows=nrows2, ncols=ncols2, figsize=(7*ncols2, 4*nrows2))
+        axes2 = np.reshape(axes2, shape=(nrows2, ncols2))
+        
+        fss.plot_subtraction_fits((0,1),   axes=axes2[:,0])
+        fss.plot_subtraction_fits((0,1,2), axes=axes2[:,2])
+
+        fss.plot_partial_sums((0,1),   axes=axes2[:,1])
+        fss.plot_partial_sums((0,1,2), axes=axes2[:,3])
+
+        fig2.tight_layout()
+        fig2.savefig(Path.cwd() / 'zeugs' / 'plots' / 'mats_sub_fits_sums.png', dpi=400)
+
+
+
+
+# creation of plot of  m and dm and Q over r_0  for two-mass fit
 def mass_rmin_manym_bs():
     
     n_bs        = 200
     do_comp     = False
-    pickle_path = Path('/home/ln29bamu/code/milc_luis') / 'zeugs' / 'data' / 'bs_rmin_fits_ex1.npy'
+    pickle_path = Path.cwd() / 'zeugs' / 'data' / 'bs_rmin_fits_ex1.npy'
 
     # decent Q's
     if 1:
@@ -734,7 +850,7 @@ def mass_rmin_manym_bs():
 
 
     nrows, ncols = 1, 3
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(wlatex, wlatex/ncols*0.99), sharey=True)
     axes = np.reshape(axes, shape=(nrows, ncols))
 
 
@@ -745,8 +861,9 @@ def mass_rmin_manym_bs():
                 y    = gv.mean(masses_data[ex, mats, :]),
                 yerr = gv.sdev(masses_data[ex, mats, :]),
                 marker    = 'o',
+                markersize= 3,
                 linestyle = '--' ,
-                label = ('m' if ex==0 else 'dm') + f'_{ex}_{mats}'
+                label = rf'$m_{mats}$' if ex==0 else rf'$\Delta m_{mats}$'
             )
         axes[0,mats].set_xlim([(2.9,10.1),(2.9,9.1),(2.9,7.4)][mats])
         axes[0,mats].set_xlabel('r_min / a')
@@ -755,36 +872,91 @@ def mass_rmin_manym_bs():
 
 
 
+
     # do Q values
     if 1:
 
-        fss = FitSubSum(bs=False)
-        fss.iflows = iflows
-        fss.r_min_left_list_mats = tuple(r_mins for _ in range(3))
+        do_comp     = False
+        pickle_path = Path.cwd() / 'zeugs' / 'data' / 'bs_rmin_fits_ex1_Q.pkl'
 
-        res = fss.do_fits_for_many_r_min_lefts_for_all_mats('var', ex_max)
+        if do_comp:
+            fss = FitSubSum(bs=False)
+            fss.iflows = iflows
+            fss.r_min_left_list_mats = tuple(r_mins for _ in range(3))
+            res = fss.do_fits_for_many_r_min_lefts_for_all_mats('var', ex_max)
+            Q_vals = [[fitstuff.fit.Q for fitstuff in res[mats]] for mats in (0,1,2)]
+            with pickle_path.open('wb') as f:
+                pickle.dump(Q_vals, f)
+        else:
+            with open(pickle_path, 'rb') as f:
+                Q_vals = pickle.load(f)
+
+            
 
         for mats in (0,1,2):
             ax = axes[0,mats]
             ax_twin = ax.twinx()
             ax_twin.plot(
                 r_mins,
-                [fitstuff.fit.Q for fitstuff in res[mats]],
-                marker    = 's',
-                linestyle = '-',
-                alpha     = 0.5,
-                label     = 'Q',
+                Q_vals[mats],
+                marker     = 's',
+                markersize = 3,
+                linestyle  = '--',
+                alpha      = 0.7,
+                label      = r'$Q$',
+                color      = 'plum',
             )
-            ax_twin.set_ylabel('Q')
             ax_twin.set_ylim(0, 1)
+
+            # show the Q axis only on the rightmost subplot
+            if mats < 2:
+                ax_twin.set_ylabel(None)
+                ax_twin.tick_params(right=False, labelright=False)
+                ax_twin.spines["right"].set_visible(False)
+            else:
+                ax_twin.set_ylabel(None)
+                ax_twin.tick_params(right=True, labelright=True)
+                ax_twin.spines["right"].set_visible(True)
 
             lines1, labels1 = ax.get_legend_handles_labels()
             lines2, labels2 = ax_twin.get_legend_handles_labels()
-            ax.legend(lines1 + lines2, labels1 + labels2, loc='best')
+            ax.legend(
+                lines1+lines2, labels1+labels2,
+                loc=['upper center', 'upper center', 'lower left'][mats],
+                labelspacing=0.25,
+                bbox_to_anchor=[(0.50, 1.00), (0.62, 1.00), (0.10, 0.0)][mats],
+            )
 
 
-    fig.tight_layout()
-    fig.savefig(Path('/home/ln29bamu/code/milc_luis') / 'zeugs' / 'plots' / 'bootstrap_rmin_fits_ex1.png', dpi=400)
+
+    for mats in (0,1,2):
+        ax = axes[0,mats]
+        ax.set_ylabel(None)
+        if mats==0:
+            ax.text(
+                0.05, 0.95,
+                r'$m / T$',# + f' (mode {mats})',
+                transform=ax.transAxes,
+                ha="left",
+                va="top"
+            )
+        if mats==2:
+            ax.text(
+                0.95, 0.95,
+                r'$Q$',
+                transform=ax.transAxes,
+                ha="right",
+                va="top"
+            )
+        ax.set_xlabel(r'$r_0 / a$')
+        ax.set_ylim((0,33))
+        # ax.set_title(rf'Matsubara mode {mats}')
+
+
+
+    fig.tight_layout(w_pad=0.25)
+    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'bootstrap_rmin_fits_ex1.pdf', dpi=400)
+
 
 
 
@@ -1166,7 +1338,7 @@ def fits_manym_bs():
 
 
 
-main = fits_gs
+main = mass_rmin_bs
 
 
 
