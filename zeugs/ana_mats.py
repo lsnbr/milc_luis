@@ -45,15 +45,15 @@ class FitStuff:
 
 class FitSubSum:
 
-    def __init__(self, bs : bool = False) -> None:
+    def __init__(self, bs : bool = False, printinit : bool = True) -> None:
         '''Setting up ense and dist, and other variables.'''
 
         # get correlators  G(w_n, r) / T^7
-        print('loading correlator data...')
+        if printinit: print('loading correlator data...')
         ense_all = get_data_mats_unbinned()
         if bs: self.ense_all = next(gv.dataset.bootstrap_iter(ense_all))
         else:  self.ense_all = ense_all
-        print(self.ense_all.shape, self.ense_all.dtype)
+        if printinit: print(self.ense_all.shape, self.ense_all.dtype)
 
         # get distances
         self.dist = radial_separations(ns)
@@ -514,7 +514,8 @@ class FitSubSum:
 
         for iiflow, iflow in enumerate(self.iflows):
             fitstuff_list = self.do_fits_for_many_r_min_lefts(r_min_left_list, [iflow], mats, 'var', ex_max)
-            plot_fitp_and_Q(r_min_left_list, fitstuff_list, [f'm_0_{mats}'], axes[iiflow], labelx=f'{iflow}, {flowtimes[iflow]:.2f}')
+            pnames = [f'm_0_{mats}'] + [f'dm_{ex}_{mats}' for ex in range(1, ex_max+1)]
+            plot_fitp_and_Q(r_min_left_list, fitstuff_list, pnames, axes[iiflow], labelx=f'{iflow}, {flowtimes[iflow]:.2f}')
             res.append(fitstuff_list)
 
         if path is not None:

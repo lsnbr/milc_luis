@@ -161,22 +161,152 @@ def main_visdata():
 # for the plot showing correlatios in r. between matsubara modes, and in t
 def vis_correlations():
 
-    nrows, ncols = 1, 3
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
-    axes = np.reshape(axes, shape=(nrows, ncols))
-
-
-    # get correlators  G(w_n, r) / T^7
-    print('loading correlator data...')
-    ense_all = get_data_mats_unbinned()
-    print(ense_all.shape, ense_all.dtype)
-
-    # get distances
+    ense_all = get_data_mats_unbinned()  # shape: (nconf, nflow, nmats, ndist)
     dist = radial_separations(ns)
+    nflow = ense_all.shape[1]
 
 
+    # correlations in r
+    iflow_r = 16
+    flow_r  = flowtimes[iflow_r]
 
-    # correlations in distance
+    ense_modes = ense_all[:, iflow_r, 0:2, :]          
+    data_modes = gv.dataset.avg_data(ense_modes)                 
+    corr_modes = gv.evalcorr(data_modes) 
+
+    rmin = 0
+    rmax = 20
+    il = index_from_distance(dist, rmin)
+    ir = index_from_distance(dist, rmax)                       
+
+    corr_r_m     = corr_modes[1, il:ir, 1, il:ir]      
+    corr_r_cross = corr_modes[0, il:ir, 1, il:ir]
+
+    n_r = corr_r_m.shape[0]
+
+
+    # correlation in t
+    mats_flow = 1
+    r_flow    = 10
+    ir_flow   = index_from_distance(dist, r_flow)
+
+    data_flow = gv.dataset.avg_data(ense_all[:, :, mats_flow, ir_flow])
+    corr_flow = gv.evalcorr(data_flow)                                    
+
+
+    # --- plot 1x3 with single colorbar ---
+    fig, axes = plt.subplots(
+        1, 3,
+        figsize=(wlatex, 0.38 * wlatex),
+        constrained_layout=True
+    )
+
+    # ----- LEFT: r-corr mode mats_for_r -----
+    im0 = axes[0].imshow(
+        corr_r_m,
+        origin="upper",
+        cmap="coolwarm",
+        vmin=0, vmax=1,
+        interpolation="nearest",
+        aspect="equal"
+    )
+
+    n_ticks = 5
+    ticks = np.linspace(0, n_r - 1, n_ticks)
+    labels = np.linspace(rmin, rmax, n_ticks)
+
+    axes[0].set_xticks(ticks)
+    axes[0].set_yticks(ticks)
+    axes[0].set_xticklabels([f"{x:.0f}" for x in labels])
+    axes[0].set_yticklabels([f"{x:.0f}" for x in labels])
+
+    axes[0].set_xlabel(None) 
+    axes[0].set_ylabel(None) 
+    axes[0].text(
+        0.05, 0.05, r"$r/a$",
+        transform=axes[0].transAxes,
+        ha="left", va="bottom",
+        color="black",
+        bbox=dict(facecolor="white", edgecolor="none", alpha=1, pad=1.5),
+    )
+    # axes[0].set_xlabel(r"$r / a$")
+    # axes[0].set_ylabel(r"$r / a$")
+    axes[0].set_title(f"mode 1, $t={flow_r:.2f} a^2$")
+
+    # ----- MIDDLE: cross r-corr -----
+    im1 = axes[1].imshow(
+        corr_r_cross,
+        origin="upper",
+        cmap="coolwarm",
+        vmin=0, vmax=1,
+        interpolation="nearest",
+        aspect="equal"
+    )
+
+    axes[1].set_xticks(ticks)
+    axes[1].set_yticks(ticks)
+    axes[1].set_xticklabels([f"{x:.0f}" for x in labels])
+    axes[1].set_yticklabels([f"{x:.0f}" for x in labels])
+
+    axes[1].set_xlabel(None) 
+    axes[1].set_ylabel(None) 
+    axes[1].text(
+        0.05, 0.05, r"$r/a$",
+        transform=axes[1].transAxes,
+        ha="left", va="bottom",
+        color="black",
+        bbox=dict(facecolor="white", edgecolor="none", alpha=1, pad=1.5),
+    )
+    # axes[1].set_xlabel(r"$r / a$")
+    # axes[1].set_ylabel(r"$r / a$")
+    axes[1].set_title(f"mode 0 vs 1, $t={flow_r:.2f} a^2$")
+
+    # ----- RIGHT: flowtime corr -----
+    im2 = axes[2].imshow(
+        corr_flow,
+        origin="upper",
+        cmap="coolwarm",
+        vmin=0, vmax=1,
+        interpolation="nearest",
+        aspect="equal"
+    )
+
+    nflow = len(flowtimes)
+    n_ticks_t = 4
+    tick_idx = np.linspace(0, nflow - 1, n_ticks_t).round().astype(int)
+
+    axes[2].set_xticks(tick_idx)
+    axes[2].set_yticks(tick_idx)
+    axes[2].set_xticklabels([f"{flowtimes[i]:.2f}" for i in tick_idx])
+    axes[2].set_yticklabels([f"{flowtimes[i]:.2f}" for i in tick_idx])
+
+    axes[2].set_xlabel(None) 
+    axes[2].set_ylabel(None) 
+    axes[2].text(
+        0.05, 0.05, r"$t/a^2$",
+        transform=axes[2].transAxes,
+        ha="left", va="bottom",
+        color="black",
+        bbox=dict(facecolor="white", edgecolor="none", alpha=1, pad=1.5),
+    )
+    # axes[2].set_xlabel(r"t / $a^2$")
+    # axes[2].set_ylabel(r"flowtime / $a^2$")
+    axes[2].set_title(f"mode ${mats_flow}$, $r={r_flow}$")
+
+    # single colorbar
+    cbar = fig.colorbar(
+        im2,
+        ax=axes[2],     # attach to the rightmost axis only
+        fraction=0.046, # controls colorbar height relative to axis
+        pad=0.08
+    )
+    cbar.set_label("correlation")
+
+    outpath = Path.cwd() / 'zeugs' / 'plots' / 'corr_1x3.pdf'
+    fig.savefig(outpath, bbox_inches="tight")
+    plt.close(fig)
+
+
 
 
 
@@ -333,24 +463,45 @@ def mass_rmin():
         axes1 = np.reshape(axes1, shape=(nrows1, ncols1))
 
 
+        ex_max = 1
 
         mats = 2
-        fss.r_min_left_list_mats = [
-            tuple(np.arange(5, 18+1e-6, 1/2) for _ in range(3)),
-            tuple(np.arange(5, 13+1e-6, 1/2) for _ in range(3)),
-            tuple(np.arange(5, 11+1e-6, 1/3) for _ in range(3)),
-        ][mats]
 
-        allfits = fss.plot_iflow_comparison_of_rleft_fits_single_mats(mats=mats, ex_max=0, axes=axes1[:,0])
+        if ex_max == 0:
+            fss.r_min_left_list_mats = [
+                tuple(np.arange(5, 18+1e-6, 1/2) for _ in range(3)),
+                tuple(np.arange(5, 13+1e-6, 1/2) for _ in range(3)),
+                tuple(np.arange(5, 11+1e-6, 1/3) for _ in range(3)),
+            ][mats]
+        elif ex_max == 1:
+            fss.r_min_left_list_mats = [
+                tuple(np.arange(5, 16+1e-6, 1/2) for _ in range(3)),
+                tuple(np.arange(5, 13+1e-6, 1/2) for _ in range(3)),
+                tuple(np.arange(4, 10+1e-6, 1/3) for _ in range(3)),
+            ][mats]
+        else:
+            raise Exception('efjibwiofubwi')
+
+        allfits = fss.plot_iflow_comparison_of_rleft_fits_single_mats(mats=mats, ex_max=ex_max, axes=axes1[:,0])
 
 
 
         for iifl, ifl in enumerate(fss.iflows):
-            rmin1, rmin2 = {
-                0 : {8:(10.5,13), 10:(11,14.5), 12:(11.5,16), 14:(12,16.5), 16:(12.5,17), 18:(13,18), 20:(14,18), 21:(14.5,18)},
-                1 : {8:(7,10), 10:(7.5,10.5), 12:(8,11), 14:(8,11.5), 16:(9,12), 18:(9,12), 20:(10,13), 21:(10.5,13)},
-                2 : {8:(5+2/3,7), 10:(6,7), 12:(6+1/3,7+2/3), 14:(6+2/3,8+1/3), 16:(7,8+1/3), 18:(7+2/3,9), 20:(8,9+1/3), 21:(9,10+1/3)},
-            }[mats][ifl]
+
+            if ex_max == 0:
+                rmin1, rmin2 = {
+                    0 : {8:(10.5,13), 10:(11,14.5), 12:(11.5,16), 14:(12,16.5), 16:(12.5,17), 18:(13,18), 20:(14,18), 21:(14.5,18)},
+                    1 : {8:(7,10), 10:(7.5,10.5), 12:(8,11), 14:(8,11.5), 16:(9,12), 18:(9,12), 20:(10,13), 21:(10.5,13)},
+                    2 : {8:(5+2/3,7), 10:(6,7), 12:(6+1/3,7+2/3), 14:(6+2/3,8+1/3), 16:(7,8+1/3), 18:(7+2/3,9), 20:(8,9+1/3), 21:(9,10+1/3)},
+                }[mats][ifl]
+            elif ex_max == 1:
+                rmin1, rmin2 = {
+                    0 : {8:(6.5,9.5), 10:(7,8.5), 12:(7.5,11.5), 14:(9,11), 16:(9.5,12), 18:(9,11.5), 20:(11.5,15), 21:(10,12)},
+                    1 : {8:(5.5,6.5), 10:(6.5,8), 12:(7,9.5), 14:(7.5,9), 16:(7,8.5), 18:(8,10), 20:(9,11), 21:(10,12)},
+                    2 : {8:(5+1/3,6+2/3), 10:(5+2/3,6+2/3), 12:(6,6+1/3), 14:(6+2/3,7+1/3), 16:(6+2/3,7+2/3), 18:(6,7+2/3), 20:(8,9), 21:(8,9+2/3)},
+                }[mats][ifl]
+            else:
+                raise Exception('wefiwuhefuwihf')
             irmin1, irmin2 = (np.argwhere(np.abs(fss.r_min_left_list_mats[mats] - rmin) < 1e-6)[0][0] for rmin in (rmin1, rmin2))
  
             for i, (irmin, rmin) in enumerate(zip((irmin1, irmin2), (rmin1, rmin2))):
@@ -363,7 +514,7 @@ def mass_rmin():
                 plot_fitfcn(x_fit, y_fit, ax, label=rf'fit $(r_0={rmin:.1f})$')
 
                 ax.set_xlabel(r'$r / a$')
-                ax.set_xlim([(10,35), (6,25), (5,18)][mats])
+                ax.set_xlim([(6,35), (5,25), (5,18)][mats])
                 yliml, ylimr = min(gv.mean(y_fit)), max(gv.mean(y_fit))
                 ax.set_ylim(yliml - (ylimr-yliml)*0.1, ylimr + (ylimr-yliml)*0.1)
                 ax.set_ylabel(r'$G / T^7$')
@@ -372,13 +523,33 @@ def mass_rmin():
 
 
         fig1.tight_layout()
-        fig1.savefig(Path.cwd() / 'zeugs' / 'plots' / f'mats_rmin_tests_gs_mats{mats}.png', dpi=400)
+        fnameabc = 'gs' if ex_max==0 else f'ex{ex_max}'
+        fig1.savefig(Path.cwd() / 'zeugs' / 'plots' / f'mats_rmin_tests_{fnameabc}_mats{mats}.png', dpi=400)
 
+
+
+
+
+
+    rmin_per_iflow_mats_exmax : list[list[dict[int,float]]] = [
+        [   # ex_max = 0
+            {8:10.5, 10:11, 12:11.5, 14:12, 16:12.5, 18:13, 20:14, 21:15},  # mats = 0
+            {8:7.5, 10:7.5, 12:8, 14:8.5, 16:9, 18:9.5, 20:10, 21:10.5},    # mats = 1
+            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                        # mats = 2
+        ],
+        [   # ex_max = 1
+            {8:9, 10:9, 12:10.5, 14:11, 16:11.5, 18:11.5, 20:12, 21:13},    # mats = 0
+            {8:6.5, 10:7, 12:7.5, 14:8, 16:9, 18:9.5, 20:10, 21:11},        # mats = 1
+            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                        # mats = 2
+        ]
+    ]
 
 
 
     # do simultaneous plot
-    if 1:
+    if 0:
+
+        ex_max = 1
 
         fss = FitSubSum(bs=False)
 
@@ -388,13 +559,9 @@ def mass_rmin():
 
         for mats in (0,1,2):
 
-            rmin_per_iflow = [
-                {8:10.5, 10:11, 12:11.5, 14:12, 16:12.5, 18:13, 20:14, 21:15},
-                {8:7.5, 10:7.5, 12:8, 14:8.5, 16:9, 18:9.5, 20:10, 21:10.5},
-                {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},
-            ][mats]
+            rmin_per_iflow = rmin_per_iflow_mats_exmax[ex_max][mats]
 
-            fss.do_fit_one_mat_diff_rmin(mats, rmin_per_iflow, ex_max=0, printfits=True)
+            fss.do_fit_one_mat_diff_rmin(mats, rmin_per_iflow, ex_max=ex_max, printfits=True)
 
 
         fss.plot_mats_fits(path = Path.cwd() / 'zeugs' / 'plots' / 'mats_fits.png')
@@ -412,41 +579,111 @@ def mass_rmin():
 
 
 
+    # check fit masses and Q
+    if 1:
+
+        for mats in (0,1,2):
+            for ex_max in (0,1):
+           
+                print(f'\n-----  {mats=}  -----  {ex_max=}  -----')
+                iflows = [8,10,12,14,16,18,20,21] if mats in (0,1) else [8,10,12,14]
+
+                for i in range(1, len(iflows)+1):
+                    fss = FitSubSum(printinit=False)
+                    fss.iflows[mats] = iflows[:i]
+                    fs = fss.do_fit_one_mat_diff_rmin(mats, rmin_per_iflow_mats_exmax[ex_max][mats], ex_max)
+                    m_name = f'm_0_{mats}'
+                    print(f'{m_name} = {fs.fit.p[m_name]},  ', end='')
+                    for ex in range(1, ex_max+1):
+                        dm_name = f'dm_{ex}_{mats}'
+                        print(f'{dm_name} = {fs.fit.p[dm_name]},  ', end='')
+                    print(f'Q = {fs.fit.Q:.4f},  ', end='')
+                    print(f'iflows = {fss.iflows[mats]}')
+
+
+
+
+
+
+
 # new subs sums
 # nnnnneeeeewwwwww
 def sub_sums_bs():
 
-    n_bs        = 45
+    n_bs        = 50
     do_comp     = True
-    pickle_path = Path.cwd() / 'zeugs' / 'data' / 'bs_subsums.pkl'
+    pickle_path = Path.cwd() / 'zeugs' / 'data' / 'bs_subsums_many.pkl'
 
 
     restart = False
-    # bs_data[bs] = (ifl -> tsum01, ifl -> tsum012, mats -> pmean, (sums_mats, rleft, rright))
+    # bs_data[name][bs] = (ifl -> tsum01, ifl -> tsum012, mats -> pmean, (sums_mats, rleft, rright))
 
     if (not do_comp) or (not restart and pickle_path.exists()):
         with open(pickle_path, 'rb') as f:
             bs_data = pickle.load(f)
     else:
-        bs_data = []
+        bs_data = {}
 
 
 
-    iflows_mats = {
-        0 : [8,10,12,14,16,18],
-        1 : [8,10,12,14,16,18],
-        2 : [8,10,12,14]
-    }
-    ex_max = 0
-    rmin_per_iflow = [
-        {8:10.5, 10:11, 12:11.5, 14:12, 16:12.5, 18:13, 20:14, 21:15},
-        {8:7.5, 10:7.5, 12:8, 14:8.5, 16:9, 18:9.5, 20:10, 21:10.5},
-        {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},
-    ]
+    name = 'gs21'
 
 
+    if name == 'gs18': name = 'gs'
+
+    if name[:2] == 'gs':
+        ex_max = [0,0,0]
+        rmin_per_iflow = [
+            {8:10.5, 10:11, 12:11.5, 14:12, 16:12.5, 18:13, 20:14, 21:15},
+            {8:7.5, 10:7.5, 12:8, 14:8.5, 16:9, 18:9.5, 20:10, 21:10.5},
+            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},
+        ]
+    if name == 'ex110':
+        ex_max = [1,1,0]
+        rmin_per_iflow = [
+            {8:9, 10:9, 12:10.5, 14:11, 16:11.5, 18:11.5, 20:12, 21:13},
+            {8:6.5, 10:7, 12:7.5, 14:8, 16:9, 18:9.5, 20:10, 21:11},
+            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},
+        ]
+
+    if name == 'ex1':
+        ex_max = [1,1,1]
+        rmin_per_iflow = [
+            {8:9, 10:9, 12:10.5, 14:11, 16:11.5, 18:11.5, 20:12, 21:13},
+            {8:6.5, 10:7, 12:7.5, 14:8, 16:9, 18:9.5, 20:10, 21:11},
+            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},
+        ]
+
+    def iflows_mats_name(nm : str) -> dict[int, list[int]]:
+        if nm[:2] == 'gs':
+            ifl_max = int(nm[2:]) if len(nm)>2 else 18
+            return {
+                0 : [ifl for ifl in [8,10,12,14,16,18,20,21] if ifl <= ifl_max],
+                1 : [ifl for ifl in [8,10,12,14,16,18,20,21] if ifl <= ifl_max],
+                2 : [ifl for ifl in [8,10,12,14] if ifl <= ifl_max]
+            }
+        if nm == 'ex110':
+            return {
+                0 : [8,10,12,14,16,18],
+                1 : [8,10,12,14,16,18],
+                2 : [8,10,12,14]
+            }
+        if nm == 'ex1':
+            return {
+                0 : [8,10,12,14,16,18],
+                1 : [8,10,12,14,16,18],
+                2 : [8,10,12,14]
+            }
+        raise Exception(f'bad name: {nm}')
+
+    iflows_mats = iflows_mats_name(name)
+
+ 
 
     if do_comp:
+
+        if name not in bs_data:
+            bs_data[name] = []
 
         for i_bs in range(n_bs):
             print(f'bootstrap sample {i_bs+1}/{n_bs}...')
@@ -455,7 +692,7 @@ def sub_sums_bs():
             fss.iflows = iflows_mats
 
             for mats in (0,1,2):
-                fss.do_fit_one_mat_diff_rmin(mats, rmin_per_iflow[mats], ex_max=ex_max, printfits=False)
+                fss.do_fit_one_mat_diff_rmin(mats, rmin_per_iflow[mats], ex_max=ex_max[mats], printfits=False)
 
             pmeans = [fss.fitstuff_mats[mats].fit.pmean for mats in (0,1,2)]
 
@@ -463,13 +700,13 @@ def sub_sums_bs():
             tsums01  = fss.do_sums_for_sub_from_mats((0,1))
             tsums012 = fss.do_sums_for_sub_from_mats((0,1,2))
 
-            bs_data.append((tsums01, tsums012, pmeans, (fss.tsums_sinh, fss.rleft_sinh, fss.rright_sinh)))
+            bs_data[name].append((tsums01, tsums012, pmeans, (fss.tsums_sinh, fss.rleft_sinh, fss.rright_sinh)))
 
             with pickle_path.open('wb') as f:
                 pickle.dump(bs_data, f)
 
     print()
-    print(len(bs_data))
+    print(*((name, len(bsd)) for name,bsd in bs_data.items()))
     print()
 
 
@@ -479,9 +716,9 @@ def sub_sums_bs():
     if 1:
 
         masses_ense = np.array(
-            [ [ [pmeans[mats][('m' if ex==0 else 'dm') + f'_{ex}_{mats}'] for ex in range(ex_max+1)]
+            [ [ [pmeans[mats][('m' if ex==0 else 'dm') + f'_{ex}_{mats}'] for ex in range(min(ex_max)+1)]
                 for mats in (0,1,2) ]
-            for _,_,pmeans,_ in bs_data ],
+            for _,_,pmeans,_ in bs_data[name] ],
             dtype=float
         )
         print(masses_ense.shape, masses_ense.dtype)
@@ -512,32 +749,36 @@ def sub_sums_bs():
         axes = np.reshape(axes, shape=(nrows, ncols))
 
         subs  = [(0,1), (0,1,2)]
+        names = 'gs12 gs14 gs16 gs ex110 ex1'.split()
+        names = 'ex1 ex110 gs gs20 gs21'.split()
 
 
         for isub, sub in enumerate(subs):
 
-            iflows = sorted(set.intersection(*(set(iflows_mats[mats]) for mats in sub)))
-            x_list = [flt for flt in flowtimes[iflows]]
-            
-            tsums_ense = { iflow : np.array([(tsums01 if sub==(0,1) else tsums012)[iflow] for tsums01,tsums012,_,_ in bs_data])
-                           for iflow in iflows }
-            tsums_data = gv.dataset.avg_data(tsums_ense, bstrap=True)
-            y_list = [tsums_data[ifl] for ifl in iflows]
+            for iname, name in enumerate(names):
 
-            axes[0,isub].errorbar(
-                x=x_list, y=gv.mean(y_list), yerr=gv.sdev(y_list),
-                marker='o', linestyle='none',
-            )
+                iflows = sorted(set.intersection(*(set(iflows_mats_name(name)[mats]) for mats in sub)))
+                x_list = [flt + iname*0.01 for flt in flowtimes[iflows]]
+                
+                tsums_ense = { iflow : np.array([(tsums01 if sub==(0,1) else tsums012)[iflow] for tsums01,tsums012,_,_ in bs_data[name]])
+                            for iflow in iflows }
+                tsums_data = gv.dataset.avg_data(tsums_ense, bstrap=True)
+                y_list = [tsums_data[ifl] for ifl in iflows]
+
+                axes[0,isub].errorbar(
+                    x=x_list, y=gv.mean(y_list), yerr=gv.sdev(y_list),
+                    marker='o', linestyle='none', label=name,
+                )
 
             axes[0,isub].set_xlabel(r'flowtime $t / a^2$')
-            axes[0,isub].set_ylabel(rf'H{sub} $/ T^4$')
+            axes[0,isub].set_ylabel(rf'$H_E^{{{sub}}} / T^4$')
             axes[0,isub].set_xlim(0, max(x_list) * 1.1)
             axes[0,isub].set_ylim(min(y.mean - y.sdev for y in y_list) * 1.1, 0)
             axes[0,isub].legend()
 
 
         fig.tight_layout()
-        fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'mats_sums_new.png', dpi=400)
+        fig.savefig(Path.cwd() / 'zeugs' / 'plots' / f'mats_sums_many.png', dpi=400)
 
 
 
