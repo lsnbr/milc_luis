@@ -59,7 +59,7 @@ class FitSubSum:
         self.dist = radial_separations(ns)
 
         # some variables for fits
-        self.iflows = [8, 10, 12, 14]
+        self.iflows : dict[int, list[int]] = {}
         self.r_min_left_list_mats = (
             np.arange(5, 15+1e-6, 1/3),
             np.arange(5, 12+1e-6, 1/3),
@@ -72,14 +72,50 @@ class FitSubSum:
         self.reltol       = 0.01
         self.max_bin_size = 5
 
+        # place where fits per mats are stored
+        self.fitstuff_mats : dict[int, FitStuff] = {}
+
         # some variables for sums
         self.tsums_sub = {}
         self.psums_sub = {}
         self.rleft_sub  = {}
         self.rright_sub = {}
+        
+        self.tsums_sinh = {}
+        self.psums_sinh = {}
+        self.rleft_sinh  = {}
+        self.rright_sinh = {}
+
         self.psums_binsize = 0.5
         self.dist_psums    = bin_distances(ns, self.psums_binsize)
         
+
+
+    def get_labels_mats(self, mats : int) -> dict[Any, str]:
+        '''generate labels for mats and self.iflows'''
+
+        labels = {}
+        for iflow in self.iflows[mats]:
+            tf = flowtimes[iflow]
+            rf = flowtime_to_radius(tf, nt) * nt
+            labels[iflow, mats] = rf'$t_f={tf:.2f}a^2, r_f={rf:.2f}a, n={mats}$'
+        return labels
+    
+
+
+    def get_common_iflows(self, mats_vals : Iterable[int]|None = None) -> list[int]:
+        '''iflows that are common in all mats'''
+
+        if mats_vals is None: mats_vals = (0,1,2)
+        return sorted(set.intersection(*(set(self.iflows[mats]) for mats in mats_vals)))
+    
+
+    def get_all_iflows(self, mats_vals : Iterable[int]|None = None) -> list[int]:
+        '''get union of iflows of all mats'''
+
+        if mats_vals is None: mats_vals = (0,1,2)
+        return sorted(set.union(*(set(self.iflows[mats]) for mats in mats_vals)))
+
 
 
 
@@ -98,7 +134,8 @@ class FitSubSum:
     def do_sums_for_sub(self, sub : Iterable[int]) -> tuple[list[float], list[np.ndarray]]:
         '''...'''
 
-        for iflow in self.iflows:
+        iflows = self.get_common_iflows(sub)
+        for iflow in iflows:
 
             ense_sub = mats_subtraction(sub, [build_integrand(self.dist, self.ense_all[:, iflow, mats, :], mats) for mats in sub])
 
@@ -113,27 +150,108 @@ class FitSubSum:
             self.psums_sub[sub, iflow] = psums
             print(f'total sum (sub{"".join(map(str, sub))}) = {tsum:.3f} T^4')
 
-        return [self.tsums_sub[sub, iflow] for iflow in self.iflows], [self.psums_sub[sub, iflow] for iflow in self.iflows]
+        return [self.tsums_sub[sub, iflow] for iflow in iflows], [self.psums_sub[sub, iflow] for iflow in iflows]
+    
+
+
+
+
+    def do_sums_for_sub_from_mats(self, sub : Iterable[int]) -> dict[int, float]:
+        '''use sum ove mats sinh for sub sums'''
+
+        res = {}
+
+        for iflow in self.get_common_iflows(sub):
+            tsum = mats_subtraction(sub, [self.tsums_sinh[iflow, mats] for mats in sub])
+            res[iflow] = tsum
+            print(f'sum {sub} = {tsum:.3f} T^4')
+
+        return res
+
+
+
+    def do_sums_for_mats(self, mats_vals : int|list[int], printsums : bool = False, **kwargs : Any) -> None:
+        '''do sum for each mats sinh integrand individually'''
+
+        cbin_size = kwargs['cbin_size'] if 'cbin_size' in kwargs else 0.25
+        cbins     = find_distance_bins(self.dist, cbin_size)
+        dist_b,   = bin_averages(cbins, self.dist)
+
+        if isinstance(mats_vals, int): mats_vals = [mats_vals]
+        for mats in mats_vals:
+            for iflow in self.iflows[mats]:
+
+                ense_int = build_integrand(self.dist, self.ense_all[:, iflow, mats, :], mats)
+                ense_int_b, = bin_averages(cbins, ense_int)
+
+                rleft     = self.fitstuff_mats[mats].rlims[iflow,mats][0]
+                _, rright = find_rright_where_sn_worse_than_rleft(dist_b, ense_int_b, (lambda x: gv.mean(self.fitfcn_sinh(iflow, mats, np.array([x]))[0])), rleft, 0.2)
+                # _, rright = find_rright_where_sn_worse_than_rleft(self.dist, ense_int, (lambda x: gv.mean(self.fitfcn_sinh(iflow, mats, np.array([x]))[0])), rleft, 0.2)
+                self.rleft_sinh[iflow, mats]  = rleft
+                self.rright_sinh[iflow, mats] = rright
+                if printsums: print(f'{rleft=:.2f}, {rright=:.2f}')
+
+                tsum, psum = sum_lin(ense_int, (lambda x: gv.mean(self.fitfcn_sinh(iflow, mats, x))), rleft, rright, self.psums_binsize)
+                self.tsums_sinh[iflow, mats] = tsum
+                self.psums_sinh[iflow, mats] = psum
+                if printsums: print(f'total sum ({mats=}) ({iflow=}) = {tsum:.3f} T^4')
+
+
+
+
+    def do_fit_one_mat_diff_rmin(self, mats : int, rmin_dict : dict[int, float], ex_max : int, printfits : bool = False) -> FitStuff:
+        '''do fit for one mats, but use different rmin for each flowtime'''
+
+        labels = self.get_labels_mats(mats)
+
+        # preliminary fit with constant size bins
+        dist_fit0, data_fit0, _, _ = bin_cut_avg_data(
+            self.dist, self.ense_all,
+            {idx : self.cbins for idx in labels.keys()},
+            r_cuts0_left = {(ifl,mats) : rmin_dict[ifl] for ifl in self.iflows[mats]}
+        )
+        fit0 = fit_flowtime_and_mats_tails_with_prior(
+            dist_fit0, data_fit0,
+            excited_max=ex_max, mats_list=[mats], corr=False
+        )
+        if printfits: print(fit0)
+
+        # actual fit with variable sized bins based on previous fit
+        vbins = bin_through_simultaneous_fit(
+            self.dist, self.ense_all, labels, fit0,
+            reltol=self.reltol, max_bin_size=self.max_bin_size
+        )
+        dist_fit, data_fit, ense_fit, rlims_fit = bin_cut_avg_data(
+            self.dist, self.ense_all, vbins,
+            r_cuts0_left = {(ifl,mats) : rmin_dict[ifl] for ifl in self.iflows[mats]}
+        )
+        fit = fit_flowtime_and_mats_tails_with_prior(
+            dist_fit, data_fit,
+            excited_max=ex_max, mats_list=[mats]
+        )
+        if printfits: print(fit)
+
+        self.fitstuff_mats[mats] = FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit)
+        return self.fitstuff_mats[mats]
 
 
 
 
 
-    def do_fits_for_all_mats_onlygs(self, mode : str, axes : np.ndarray|None = None) -> list[FitStuff]:
+
+    def do_fits_for_all_mats_onlygs(self, mode : str, axes : np.ndarray|None = None) -> dict[int, FitStuff]:
         '''For each mats: do fit with only gs for various r_min_left, then choose the first one where Q >= fac * Q_max.'''
 
         fac = 0.75
 
         fitstuff_list_mats = self.do_fits_for_many_r_min_lefts_for_all_mats(mode, 0, axes)
 
-        self.fitstuff_mats = []
-
-        for fitstuff_list in fitstuff_list_mats:
+        for mats, fitstuff_list in enumerate(fitstuff_list_mats):
             Q_max = max(fitstuff.fit.Q for fitstuff in fitstuff_list)
 
             for fitstuff in fitstuff_list:
                 if fitstuff.fit.Q >= fac * Q_max:
-                    self.fitstuff_mats.append(fitstuff)
+                    self.fitstuff_mats[mats] = fitstuff
                     break
 
         return self.fitstuff_mats
@@ -141,10 +259,8 @@ class FitSubSum:
 
 
 
-    def do_fits_for_all_mats_manym(self, ex_max : int, r_min_left : float|list[float], printfits : bool = False) -> list[FitStuff]:
+    def do_fits_for_all_mats_manym(self, ex_max : int, r_min_left : float|list[float], printfits : bool = False) -> dict[int, FitStuff]:
         '''For each mats: do fit with multiple excited states and fixed r_min_left.'''
-
-        self.fitstuff_mats = []
 
         for mats in (0,1,2):
             print(f'fitting mats={mats}...')
@@ -181,17 +297,15 @@ class FitSubSum:
             )
             if printfits: print(fit)
 
-            self.fitstuff_mats.append(FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit))
+            self.fitstuff_mats[mats] = FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit)
 
         return self.fitstuff_mats
     
 
 
 
-    def do_fits_for_all_mats_manym_cbins(self, ex_max : int, r_min_left : float|list[float], printfits : bool = False) -> list[FitStuff]:
+    def do_fits_for_all_mats_manym_cbins(self, ex_max : int, r_min_left : float|list[float], printfits : bool = False) -> dict[int, FitStuff]:
         '''For each mats: do fit with multiple excited states and fixed r_min_left (constant size bins).'''
-
-        self.fitstuff_mats = []
 
         for mats in (0,1,2):
             print(f'fitting mats={mats}...')
@@ -214,7 +328,7 @@ class FitSubSum:
             )
             if printfits: print(fit)
 
-            self.fitstuff_mats.append(FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit))
+            self.fitstuff_mats[mats] = FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit)
 
         return self.fitstuff_mats
 
@@ -295,11 +409,12 @@ class FitSubSum:
         '''plots fit to matsubara modes'''
 
         if path is not None:
-            nrows, ncols = len(self.iflows)+1, 3
+            nrows, ncols = len(self.get_all_iflows())+1, 3
             fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
             axes = np.reshape(axes, shape=(nrows, ncols))
 
         for mats in (0,1,2):
+            if mats not in self.fitstuff_mats: continue
             plot_flowtime_and_tau_fits(self.dist, self.fitstuff_mats[mats].labels, self.fitstuff_mats[mats].rlims, self.fitstuff_mats[mats].fit, synchro=True, axes=axes[:,mats:mats+1], max_r=30)
             plot_corr_eigenvals(self.fitstuff_mats[mats].ense, axes[-1, mats])
 
@@ -309,10 +424,57 @@ class FitSubSum:
 
 
 
-    def plot_mats_integrand_fits(self, axes : np.ndarray|None = None, path : Path|None = None) -> None:
+
+    def plot_mats_integrand_fits(self, axes : np.ndarray|None = None, path : Path|None = None, **kwargs : Any) -> None:
         '''plots fits to integrands of matsubara modes'''
 
-        raise NotImplementedError()
+        iflows_all = self.get_all_iflows()
+
+        if path is not None:
+            nrows, ncols = len(iflows_all), 3
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+            axes = np.reshape(axes, shape=(nrows, ncols))
+
+        cbin_size = kwargs['cbin_size'] if 'cbin_size' in kwargs else 0.25
+        cbins     = find_distance_bins(self.dist, cbin_size)
+        dist_b,   = bin_averages(cbins, self.dist)
+
+
+        for mats in (0,1,2):
+            for iflow in self.iflows[mats]:
+                ax = axes[min(i for i,ifl in enumerate(iflows_all) if ifl==iflow), mats]
+
+                r_left, r_right = self.fitstuff_mats[mats].rlims[iflow,mats]
+                ir_left, ir_right = index_from_distance(self.dist, r_left), index_from_distance(self.dist, r_right)
+
+                ense_int    = build_integrand(self.dist, self.ense_all[:, iflow, mats, :], mats)
+                ense_int_b, = bin_averages(cbins, ense_int)
+                data_int_b  = gv.dataset.avg_data(ense_int_b)
+                
+                plot_dist(dist_b, data_int_b, ax, label=f'data', alpha=0.7)
+                plot_fitfcn(self.dist[ir_left:ir_right], self.fitfcn_sinh(iflow, mats, self.dist[ir_left:ir_right]), ax, label=f'fit')
+
+                if (iflow,mats) in self.rleft_sinh:
+                    ax.axvline(x=self.rleft_sinh[iflow,mats], color='black', alpha=0.7)
+                if (iflow,mats) in self.rright_sinh:
+                    ax.axvline(x=self.rright_sinh[iflow,mats], color='brown', alpha=0.7)
+
+                ax.set_xlabel(r'$r / a$')
+                ax.set_xlim(5, 20)
+                ax.set_ylabel(r'$G sinh / T^7$')
+                ax.set_ylim([(-0.02,0.002), (-0.2,0.05), (-1,0.1)][mats])
+
+                ax.legend(loc='lower right')
+
+                tf = flowtimes[iflow]
+                rf = flowtime_to_radius(tf, nt) * nt
+                ax.set_title(rf'$n = {mats}, t_f = {tf:.2f} a^2 (r_f = {rf:.2f} a)$')
+
+
+        if path is not None:
+            fig.tight_layout()
+            fig.savefig(path, dpi=400)
+
 
 
 
@@ -336,6 +498,30 @@ class FitSubSum:
         if path is not None:
             fig.tight_layout()
             fig.savefig(path, dpi=400)
+
+
+
+    def plot_iflow_comparison_of_rleft_fits_single_mats(self, mats : int, ex_max : int, axes : np.ndarray|None = None, path : Path|None = None) -> list[list[FitStuff]]:
+        '''returns: fitstuff2dlist[iiflow][irmin]'''
+
+        if path is not None:
+            nrows, ncols = len(self.iflows), 1
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
+
+        res = []
+
+        r_min_left_list = self.r_min_left_list_mats[mats]
+
+        for iiflow, iflow in enumerate(self.iflows):
+            fitstuff_list = self.do_fits_for_many_r_min_lefts(r_min_left_list, [iflow], mats, 'var', ex_max)
+            plot_fitp_and_Q(r_min_left_list, fitstuff_list, [f'm_0_{mats}'], axes[iiflow], labelx=f'{iflow}, {flowtimes[iflow]:.2f}')
+            res.append(fitstuff_list)
+
+        if path is not None:
+            fig.tight_layout()
+            fig.savefig(path, dpi=400)
+
+        return res
     
 
 
@@ -343,14 +529,14 @@ class FitSubSum:
         '''plots subtracted data together with fit'''
 
         if path is not None:
-            nrows, ncols = len(self.iflows), 1
+            nrows, ncols = len(self.get_common_iflows(sub)), 1
             fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
 
         cbin_size = kwargs['cbin_size'] if 'cbin_size' in kwargs else 0.25
         cbins     = find_distance_bins(self.dist, cbin_size)
         dist_b,   = bin_averages(cbins, self.dist)
 
-        for iiflow, iflow in enumerate(self.iflows):
+        for iiflow, iflow in enumerate(self.get_common_iflows(sub)):
 
             rleft = max(self.fitstuff_mats[mats].rlims[iflow,mats][0] for mats in sub)
             ileft = index_from_distance(dist_b, rleft)
@@ -384,7 +570,7 @@ class FitSubSum:
         for iiflow, iflow in enumerate(self.iflows):
 
             plot_dist(self.dist_psums, self.psums_sub[sub, iflow], axes[iiflow], markersize=4, linestyle='--')
-            axes[iiflow].set_ylabel(f'partial sums (sub{"".join(map(str, sub))}) / T^4')
+            axes[iiflow].set_ylabel(f'partial sums (sub{"".join(map(str, sub))})' + r'$ / T^4$')
             axes[iiflow].axvline(x=self.rleft_sub[sub, iflow],  color='black', alpha=0.5)
             axes[iiflow].axvline(x=self.rright_sub[sub, iflow], color='black', alpha=0.5)
             axes[iiflow].set_xlim(0, 25)
@@ -424,9 +610,9 @@ class FitSubSum:
                 )
                 axes[iiflow, imat].set_xlim(0, 25)
                 axes[iiflow, imat].set_ylim(-1, 2)
-                axes[iiflow, imat].set_xlabel('r / a')
-                axes[iiflow, imat].set_ylabel('m_eff')
-                axes[iiflow, imat].set_title(f't={flowtimes[iflow]:.2f}a^2 and n={mat}')
+                axes[iiflow, imat].set_xlabel(r'$r / a$')
+                axes[iiflow, imat].set_ylabel(r'$m_\text{eff}$')
+                axes[iiflow, imat].set_title(rf'$t={flowtimes[iflow]:.2f}a^2 \, \text{{and}} \, n={mat}$')
 
         if path is not None:
             fig.tight_layout()
@@ -486,10 +672,10 @@ def find_rright_where_sn_worse_than_rleft(dist : np.ndarray, ense : np.ndarray, 
 
     ileft    = index_from_distance(dist, rleft)
     ense_sem = ense.std(axis=0, ddof=1) / np.sqrt(ense.shape[0])
-    sn_left  = fcn(dist[ileft]) / ense_sem[ileft]
+    sn_left  = abs(fcn(dist[ileft]) / ense_sem[ileft])
 
     for iright in range(ileft+1, len(dist)):
-        sn_right = fcn(dist[iright]) / ense_sem[iright]
+        sn_right = abs(fcn(dist[iright]) / ense_sem[iright])
         if sn_right <= fac * sn_left:
             break
 
@@ -563,13 +749,13 @@ def build_integrand(dist : np.ndarray, data : np.ndarray, mats : int) -> np.ndar
 
 
 
-def mats_subtraction(sub : Iterable[int], datas : Iterable[np.ndarray]) -> np.ndarray:
+def mats_subtraction(sub : tuple[int], datas : Iterable[np.ndarray]) -> np.ndarray:
     '''do subtraction depending on sub'''
 
     if sub == (0,1):   return datas[0] - datas[1]
-    if sub == (0,1,2): return datas[0] + (1/3) * datas[1] + (-4/3) * datas[2]
+    if sub == (0,1,2): return datas[0] + (-4/3) * datas[1] + (1/3) * datas[2]
 
-    raise Exception(f'Subtraction for sub={tuple(sub)} is not implemented.')
+    raise Exception(f'Subtraction for {sub=} is not implemented.')
 
 
 

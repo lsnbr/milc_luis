@@ -662,7 +662,7 @@ def plot_flowtime_and_tau_fits( dist : np.ndarray, labels : dict[Any, str], r_li
         y_range = y_max - y_min
         axes[axes_idxs[idx]].set_ylim(y_min - 0.1*y_range, y_max + 0.1*y_range)
         axes[axes_idxs[idx]].set_xlim(0 if min_r is None else min_r, r_right)
-        axes[axes_idxs[idx]].set_title(labels[idx])
+        axes[axes_idxs[idx]].set_title(rf'{labels[idx]}')
 
     
 

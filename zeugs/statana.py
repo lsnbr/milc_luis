@@ -294,8 +294,8 @@ def plot_dist(dist : np.ndarray, data : np.ndarray, axes : plt.Axes, **plt_args 
         yerr = gv.sdev(data),
         **plt_args
     )
-    axes.set_xlabel('r / a')
-    axes.set_ylabel('G / T^8')
+    axes.set_xlabel(r'$r / a$')
+    axes.set_ylabel(r'$G / T^8$')
     axes.legend()
 
 
