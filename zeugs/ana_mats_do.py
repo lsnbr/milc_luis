@@ -13,6 +13,7 @@ import scienceplots
 plt.style.use('science')
 plt.rcParams.update({
     'font.size' : 10,
+    'text.usetex' : False
 })
 
 from flowing import flowtime_to_radius
@@ -291,7 +292,7 @@ def vis_correlations():
     )
     # axes[2].set_xlabel(r"t / $a^2$")
     # axes[2].set_ylabel(r"flowtime / $a^2$")
-    axes[2].set_title(f"mode ${mats_flow}$, $r={r_flow}$")
+    axes[2].set_title(f"mode ${mats_flow}$, $r={r_flow} a$")
 
     # single colorbar
     cbar = fig.colorbar(
@@ -306,6 +307,50 @@ def vis_correlations():
     fig.savefig(outpath, bbox_inches="tight")
     plt.close(fig)
 
+
+
+# plot in axion chapter (end)
+def vis_sub_integrands():
+
+    twopi = 2.0 * np.pi
+
+    def K(n, x):  # x = omega'/T
+        return x / (x**2 + (twopi*n)**2)
+
+    def S01(x):
+        return K(0, x) - K(1, x)
+
+    def S012(x):
+        return K(0, x) - (4/3)*K(1, x) + (1/3)*K(2, x)
+
+    def xS01(x):
+        return x * S01(x)
+
+    def xS012(x):
+        return x * S012(x)
+
+    # linear x-range (now ok to include 0)
+    x_min, x_max = 0.01, 30.0
+    x = np.linspace(x_min, x_max, 2000)
+
+    fac = 0.75
+    fig, ax = plt.subplots(figsize=(fac*wlatex, fac*0.65*wlatex), constrained_layout=True)
+
+    ax.plot(x, xS01(x), label=r"$h^{(0,1)}$")
+    ax.plot(x, xS012(x), label=r"$h^{(0,1,2)}$")
+
+    ax.set_xlim(x_min, x_max)
+    ax.set_xlabel(r"$\omega'/T$")
+    ax.set_ylabel(r"kernel $h$")
+
+    ax.legend(frameon=True)
+
+    out = Path.cwd() / 'zeugs' / "plots" / "subtraction_kernels_x_linear.pdf"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+
+    print(f"Saved: {out}")
 
 
 
@@ -465,7 +510,7 @@ def mass_rmin():
 
         ex_max = 1
 
-        mats = 2
+        mats = 0
 
         if ex_max == 0:
             fss.r_min_left_list_mats = [
@@ -496,7 +541,7 @@ def mass_rmin():
                 }[mats][ifl]
             elif ex_max == 1:
                 rmin1, rmin2 = {
-                    0 : {8:(6.5,9.5), 10:(7,8.5), 12:(7.5,11.5), 14:(9,11), 16:(9.5,12), 18:(9,11.5), 20:(11.5,15), 21:(10,12)},
+                    0 : {8:(6,9.5), 10:(6.5,8.5), 12:(6.5,11.5), 14:(7,11), 16:(7.5,12), 18:(8,11.5), 20:(9,15), 21:(10,12)},
                     1 : {8:(5.5,6.5), 10:(6.5,8), 12:(7,9.5), 14:(7.5,9), 16:(7,8.5), 18:(8,10), 20:(9,11), 21:(10,12)},
                     2 : {8:(5+1/3,6+2/3), 10:(5+2/3,6+2/3), 12:(6,6+1/3), 14:(6+2/3,7+1/3), 16:(6+2/3,7+2/3), 18:(6,7+2/3), 20:(8,9), 21:(8,9+2/3)},
                 }[mats][ifl]
@@ -528,6 +573,137 @@ def mass_rmin():
 
 
 
+    # pretty plot for rmin tests (\label{rmin_fits_gs_new})
+    if 0:
+
+
+        # plots for gs case
+        if 1:
+            ex_max = 0
+            iflows_for_mats = [(10,18), (10,16), (10,14)]
+            rminlist_for_mats = [np.arange(7, 18+1e-6, 1), np.arange(6, 11+1e-6, 1/2), np.arange(5, 8+1e-6, 1/3)]
+        # plots for ex1 case
+        if 0:
+            ex_max = 1
+            iflows_for_mats = [(12,18), (12,18), (10,14)]
+            rminlist_for_mats = [np.arange(5, 10.5+1e-6, 1/2), np.arange(5, 10.5+1e-6, 1/2), np.arange(5, 7+2/3+1e-6, 1/3)]
+
+
+        nrows, ncols = 2, 3
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(wlatex, wlatex/ncols*nrows*1.2))
+        axes = np.reshape(axes, shape=(nrows, ncols))
+
+
+        for mats in (0,1,2):
+            for iifl, ifl in enumerate(iflows_for_mats[mats]):
+                ax = axes[iifl,mats]
+
+                fss = FitSubSum(bs=False)
+                rmins = rminlist_for_mats[mats]
+                allfits = fss.do_fits_for_many_r_min_lefts(rmins, [ifl], mats, 'var', ex_max)
+                masses_data = [fs.fit.p[f'm_0_{mats}'] for fs in allfits]
+
+                if ex_max > 0:
+                    dmasses_data = [fs.fit.p[f'dm_1_{mats}'] for fs in allfits]
+
+                Qs = [fs.fit.Q for fs in allfits]
+
+                ax.errorbar(
+                    x    = rmins,
+                    y    = gv.mean(masses_data),
+                    yerr = gv.sdev(masses_data),
+                    marker     = 'o',
+                    markersize = 4,
+                    linestyle  = '--',
+                    label      = f'$m_{mats}$' 
+                )
+
+                if ex_max > 0:
+                    ax.errorbar(
+                        x    = rmins,
+                        y    = gv.mean(dmasses_data),
+                        yerr = gv.sdev(dmasses_data),
+                        marker     = 'o',
+                        markersize = 4,
+                        linestyle  = '--', 
+                        label      = f'$\\Delta m_{mats}$' 
+                    )
+
+                ax.set_xlim(min(rmins)-0.1, max(rmins)+0.1)
+                # ax.set_ylim([(4.5,13.9),(8,21),(12,26)][mats])
+                ax.set_ylim([(0,30), (0,30)][ex_max])
+                if iifl == nrows - 1:
+                    ax.set_xlabel(r"$r_0/a$")
+                else:
+                    ax.set_xlabel(None)
+                ax.set_ylabel(None)
+
+                axQ = ax.twinx()
+                axQ.plot(
+                    rmins,
+                    Qs,
+                    marker='s',
+                    markersize=3,
+                    linestyle='--',
+                    label = 'Q',
+                    alpha = 0.7,
+                    color = 'plum',
+                )
+                axQ.set_ylim(0, 1)
+                axQ.set_ylabel(None)
+
+                leftmost  = (mats == 0)
+                rightmost = (mats == ncols - 1)
+                if not leftmost:
+                    ax.set_ylabel(None)
+                    ax.tick_params(axis='y', which='both', labelleft=False)
+
+                if not rightmost:
+                    axQ.set_ylabel(None)
+                    axQ.tick_params(axis='y', which='both', labelright=False)
+
+                ax.text(
+                    0.04, 0.96,
+                    '$m / T$',# + f' (mode {mats})',
+                    transform=ax.transAxes,
+                    ha="left",
+                    va="top"
+                )
+                ax.text(
+                    0.96, 0.96,
+                    '$Q$',
+                    transform=ax.transAxes,
+                    ha="right",
+                    va="top"
+                )
+
+                h1, l1 = ax.get_legend_handles_labels()
+                h2, l2 = axQ.get_legend_handles_labels()
+                ax.legend(
+                    h1 + h2,
+                    l1 + l2,
+                    loc='upper center',
+                    frameon=True,
+                    facecolor='white',
+                    edgecolor='none',
+                    framealpha=0.8,
+
+                    fontsize=8,          # smaller text
+                    handlelength=1.2,    # shorter line samples
+                    handletextpad=0.4,   # space between marker and text
+                    labelspacing=0.3,    # vertical spacing between entries
+                    borderpad=0.3,       # padding inside legend box
+                    borderaxespad=0.3,   # distance to axes
+                    columnspacing=0.6
+                )
+
+                ax.set_title(f'$n={mats}$, $t={flowtimes[ifl]:.2f}a^2$')
+
+
+        fig.tight_layout(w_pad=0.5)
+        fig.savefig(Path.cwd() / 'zeugs' / 'plots' / f'rmin_fits_{"gs" if ex_max==0 else "ex1"}_pretty.pdf', dpi=400)
+
+
 
 
 
@@ -537,9 +713,14 @@ def mass_rmin():
             {8:7.5, 10:7.5, 12:8, 14:8.5, 16:9, 18:9.5, 20:10, 21:10.5},    # mats = 1
             {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                        # mats = 2
         ],
+        # [   # ex_max = 1
+        #     {8:9, 10:9, 12:10.5, 14:11, 16:11.5, 18:11.5, 20:12, 21:13},    # mats = 0
+        #     {8:6.5, 10:7, 12:7.5, 14:8, 16:9, 18:9.5, 20:10, 21:11},        # mats = 1
+        #     {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                        # mats = 2
+        # ],
         [   # ex_max = 1
-            {8:9, 10:9, 12:10.5, 14:11, 16:11.5, 18:11.5, 20:12, 21:13},    # mats = 0
-            {8:6.5, 10:7, 12:7.5, 14:8, 16:9, 18:9.5, 20:10, 21:11},        # mats = 1
+            {8:6, 10:6.5, 12:6.5, 14:7, 16:7.5, 18:8, 20:9, 21:10},    # mats = 0
+            {8:6.5, 10:6.5, 12:7, 14:7.5, 16:8, 18:8.5, 20:9, 21:10},        # mats = 1
             {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                        # mats = 2
         ]
     ]
@@ -553,8 +734,8 @@ def mass_rmin():
 
         fss = FitSubSum(bs=False)
 
-        fss.iflows[0] = [8,10,12,14,16,18]
-        fss.iflows[1] = [8,10,12,14,16,18]
+        fss.iflows[0] = [8,10,12,14,16,18] #+ [20,21]
+        fss.iflows[1] = [8,10,12,14,16,18] #+ [20,21]
         fss.iflows[2] = [8,10,12,14]
 
         for mats in (0,1,2):
@@ -579,8 +760,159 @@ def mass_rmin():
 
 
 
+    # pretty plots for sinh fit and data
+    if 0:
+
+        fss = FitSubSum(bs=False)
+        fss.iflows[1] = [8,10,12,14,16,18]
+        fss.iflows[2] = [8,10,12,14]
+        ex_max = 1
+        matss  = (1,2)
+        iflows = (8,14)
+
+        for mats in matss:
+            rmin_per_iflow = rmin_per_iflow_mats_exmax[ex_max][mats]
+            fss.do_fit_one_mat_diff_rmin(mats, rmin_per_iflow, ex_max, printfits=True)
+        fss.do_sums_for_mats(mats_vals=(1,2), printsums=False)
+
+
+        # --- 2x2 plot for selected mats and iflows ---
+        nrows, ncols = len(iflows), len(matss)
+        fig, axes = plt.subplots(
+            nrows=nrows, ncols=ncols,
+            figsize=(wlatex, 0.8 * wlatex),
+            constrained_layout=True
+        )
+        axes = np.reshape(axes, (nrows, ncols))
+
+        cbin_size = 0.25
+        cbins = find_distance_bins(fss.dist, cbin_size)
+        dist_b, = bin_averages(cbins, fss.dist)
+
+        for j, mats in enumerate(matss):
+            for i, iflow in enumerate(iflows):
+                ax = axes[i, j]
+
+                # fit range
+                r_left, r_right = fss.fitstuff_mats[mats].rlims[iflow, mats]
+                ir_left = index_from_distance(fss.dist, r_left)
+                ir_right = index_from_distance(fss.dist, r_right)
+
+                # data integrand (binned)
+                ense_int = build_integrand(fss.dist, fss.ense_all[:, iflow, mats, :], mats)
+                ense_int_b, = bin_averages(cbins, ense_int)
+                data_int_b = gv.dataset.avg_data(ense_int_b)
+
+                # plot data + fit
+                plot_dist(dist_b, data_int_b, ax, label='data', alpha=0.7)
+                xfit = fss.dist[ir_left:ir_right]
+                yfit = fss.fitfcn_sinh(iflow, mats, xfit)
+                plot_fitfcn(xfit, yfit, ax, label='fit')
+
+                # optional rleft/rright markers if present
+                if (iflow, mats) in fss.rleft_sinh:
+                    ax.axvline(x=fss.rleft_sinh[iflow, mats], color='black', alpha=0.7)
+                if (iflow, mats) in fss.rright_sinh:
+                    ax.axvline(x=fss.rright_sinh[iflow, mats], color='black', alpha=0.7)
+
+                # cosmetics
+                ax.set_xlim([(5.5,20), (5.5,15), (5.5,15)][mats])
+                if i == 1: ax.set_xlabel('$r/a$')
+                else:      ax.set_xlabel(None)
+                if j == 0: ax.set_ylabel('$h_{E,t}(\\omega_n, r) / T^7$')
+                else:      ax.set_ylabel(None)
+
+                ax.set_ylim([(-0.02, 0.002), (-0.22, 0.05), (-0.95, 0.25)][mats])
+
+                tf = flowtimes[iflow]
+                rf = flowtime_to_radius(tf, nt) * nt
+                # ax.set_title(rf'$n={mats}$, $t_f={tf:.2f}a^2$ ($r_f={rf:.2f}a$)')
+                ax.set_title(rf'$n={mats}$, $t={tf:.2f}a^2$')
+
+                ax.legend(
+                    loc='lower right',
+                    frameon=True,
+                    facecolor='white',
+                    edgecolor='none',
+                    framealpha=0.7,
+                    # fontsize=8,
+                    # labelspacing=0.2,
+                    # borderpad=0.25,
+                    # handletextpad=0.4,
+                    # handlelength=1.2,
+                )
+
+        out = Path.cwd() / 'zeugs' / 'plots' / 'mats_sinh_fits_2x2.pdf'
+        fig.savefig(out, bbox_inches='tight', dpi=400)
+        plt.close(fig)
+        print(f"Saved: {out}")
+        
+
+
+
+
+    # pretty plots for fit+data (Fig: section on fits)
+    if 0:
+
+        nrows, ncols = 2, 3
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(wlatex, wlatex/ncols*nrows))
+        axes = np.reshape(axes, shape=(nrows, ncols))
+
+
+        # gs (ex_max=0) fit
+        if 0:
+            ex_max = 0
+            iflows_for_mats = [(8,18), (8,18), (8,14)]
+            xlim_mats = [(8,30), (6,20), (5,15)]
+            ylim_iifl_mats = [[(-0.0175,0.002),(-0.0055,0.0005)], [(-0.045, 0.005),(-0.0085,0.001)], [(-0.0325,0.005),(-0.025,0.0025)]]
+
+        # ex1 (ex_max=1) fit
+        if 1:
+            ex_max = 1
+            iflows_for_mats = [(8,18), (8,18), (8,14)]
+            xlim_mats = [(4.5,20), (4.5,18), (4.5,15)]
+            ylim_iifl_mats = [[(-0.38,0.02),(-0.08,0.005)], [(-0.12,0.01),(-0.018,0.0018)], [(-0.029,0.0025),(-0.027,0.002)]]
+
+
+        fss = FitSubSum(bs=False)
+        fss.iflows[0] = [8,10,12,14,16,18] #+ [20,21]
+        fss.iflows[1] = [8,10,12,14,16,18] #+ [20,21]
+        fss.iflows[2] = [8,10,12,14]
+
+        for mats in (0,1,2):
+            fss.do_fit_one_mat_diff_rmin(mats, rmin_per_iflow_mats_exmax[ex_max][mats], ex_max=ex_max, printfits=True)
+
+            for iifl, ifl in enumerate(iflows_for_mats[mats]):
+                ax = axes[iifl, mats]
+
+                r_left, r_right = fss.fitstuff_mats[mats].rlims[ifl,mats]
+                ir_left, ir_right = index_from_distance(fss.dist, r_left), index_from_distance(fss.dist, r_right)
+
+                plot_dist(fss.fitstuff_mats[mats].fit.x[ifl,mats], fss.fitstuff_mats[mats].fit.y[ifl,mats], ax, label=f'data', alpha=0.7)
+                plot_fitfcn(fss.dist[ir_left:ir_right], fss.fitfcn_mats(ifl, mats, fss.dist[ir_left:ir_right]), ax, label=f'fit')
+
+                ax.set_xlabel(r'$r / a$')
+                ax.set_xlim(xlim_mats[mats])
+
+                ax.set_ylim(ylim_iifl_mats[mats][iifl])
+                ax.set_ylabel(None)
+                ax.text(0.04, 0.96, r'$G / T^7$', transform=ax.transAxes, ha="left", va="top")
+
+                # ax.tick_params(axis="y", direction="in", pad=-18-11, right=True, labelright=False)
+
+                ax.legend(loc='lower right')
+                ax.set_title(f'$n={mats}$, $t={flowtimes[ifl]:.2f}a^2$')
+
+
+
+        fig.tight_layout(w_pad=0.5)
+        fig.savefig(Path.cwd() / 'zeugs' / 'plots' / f'fit_data_plot_ex{ex_max}.pdf', dpi=400)
+
+
+
+
     # check fit masses and Q
-    if 1:
+    if 0:
 
         for mats in (0,1,2):
             for ex_max in (0,1):
@@ -601,7 +933,27 @@ def mass_rmin():
                     print(f'iflows = {fss.iflows[mats]}')
 
 
+    # use ex_max=1 for  r_0 from ex_max=0
+    if 0:
 
+        ex_max_rmin = 1
+        ex_max_fit  = 1
+
+        for mats in (0,1,2):
+            print(f'\n-----  {mats=}  -----')
+            iflows = [8,10,12,14,16,18,20,21] if mats in (0,1) else [8,10,12,14]
+
+            for i in range(1, len(iflows)+1):
+                fss = FitSubSum(printinit=False)
+                fss.iflows[mats] = iflows[:i]
+                fs = fss.do_fit_one_mat_diff_rmin(mats, rmin_per_iflow_mats_exmax[ex_max_rmin][mats], ex_max_fit)
+                m_name = f'm_0_{mats}'
+                print(f'{m_name} = {fs.fit.p[m_name]},  ', end='')
+                for ex in range(1, ex_max_fit+1):
+                    dm_name = f'dm_{ex}_{mats}'
+                    print(f'{dm_name} = {fs.fit.p[dm_name]},  ', end='')
+                print(f'Q = {fs.fit.Q:.4f},  ', end='')
+                print(f'iflows = {fss.iflows[mats]}')
 
 
 
@@ -626,57 +978,79 @@ def sub_sums_bs():
 
 
 
-    name = 'gs21'
+    rmin_per_iflow_mats_exmax : list[list[dict[int,float]]] = [
+        [   # ex_max = 0
+            {8:10.5, 10:11, 12:11.5, 14:12, 16:12.5, 18:13, 20:14, 21:15},  # mats = 0
+            {8:7.5, 10:7.5, 12:8, 14:8.5, 16:9, 18:9.5, 20:10, 21:10.5},    # mats = 1
+            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                        # mats = 2
+        ],
+        [   # ex_max = 1
+            {8:6, 10:6.5, 12:6.5, 14:7, 16:7.5, 18:8, 20:9, 21:10},    # mats = 0
+            {8:6.5, 10:6.5, 12:7, 14:7.5, 16:8, 18:8.5, 20:9, 21:10},  # mats = 1
+            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                   # mats = 2
+        ]
+    ]
 
 
-    if name == 'gs18': name = 'gs'
+    name = 'ex111-20'
 
-    if name[:2] == 'gs':
+
+    if name == 'gs-18':
         ex_max = [0,0,0]
-        rmin_per_iflow = [
-            {8:10.5, 10:11, 12:11.5, 14:12, 16:12.5, 18:13, 20:14, 21:15},
-            {8:7.5, 10:7.5, 12:8, 14:8.5, 16:9, 18:9.5, 20:10, 21:10.5},
-            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},
-        ]
-    if name == 'ex110':
+        iflows_mats = {0:[8,10,12,14,16,18], 1:[8,10,12,14,16,18], 2:[8,10,12,14]}
+        rmin_per_iflow = rmin_per_iflow_mats_exmax[0]
+
+    if name == 'ex110-18':
         ex_max = [1,1,0]
-        rmin_per_iflow = [
-            {8:9, 10:9, 12:10.5, 14:11, 16:11.5, 18:11.5, 20:12, 21:13},
-            {8:6.5, 10:7, 12:7.5, 14:8, 16:9, 18:9.5, 20:10, 21:11},
-            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},
-        ]
+        iflows_mats = {0:[8,10,12,14,16,18], 1:[8,10,12,14,16,18], 2:[8,10,12,14]}
+        rmin_per_iflow = [rmin_per_iflow_mats_exmax[ex][mats] for mats,ex in enumerate(ex_max)]
 
-    if name == 'ex1':
+    if name == 'ex111-18':
         ex_max = [1,1,1]
-        rmin_per_iflow = [
-            {8:9, 10:9, 12:10.5, 14:11, 16:11.5, 18:11.5, 20:12, 21:13},
-            {8:6.5, 10:7, 12:7.5, 14:8, 16:9, 18:9.5, 20:10, 21:11},
-            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},
-        ]
+        iflows_mats = {0:[8,10,12,14,16,18], 1:[8,10,12,14,16,18], 2:[8,10,12,14]}
+        rmin_per_iflow = rmin_per_iflow_mats_exmax[1]
 
-    def iflows_mats_name(nm : str) -> dict[int, list[int]]:
-        if nm[:2] == 'gs':
-            ifl_max = int(nm[2:]) if len(nm)>2 else 18
-            return {
-                0 : [ifl for ifl in [8,10,12,14,16,18,20,21] if ifl <= ifl_max],
-                1 : [ifl for ifl in [8,10,12,14,16,18,20,21] if ifl <= ifl_max],
-                2 : [ifl for ifl in [8,10,12,14] if ifl <= ifl_max]
-            }
-        if nm == 'ex110':
-            return {
-                0 : [8,10,12,14,16,18],
-                1 : [8,10,12,14,16,18],
-                2 : [8,10,12,14]
-            }
-        if nm == 'ex1':
-            return {
-                0 : [8,10,12,14,16,18],
-                1 : [8,10,12,14,16,18],
-                2 : [8,10,12,14]
-            }
-        raise Exception(f'bad name: {nm}')
+    if name == 'gs-14':
+        ex_max = [0,0,0]
+        iflows_mats = {0:[8,10,12,14], 1:[8,10,12,14], 2:[8,10,12,14]}
+        rmin_per_iflow = rmin_per_iflow_mats_exmax[0]
+    if name == 'gs-16':
+        ex_max = [0,0,0]
+        iflows_mats = {0:[8,10,12,14,16], 1:[8,10,12,14,16], 2:[8,10,12,14]}
+        rmin_per_iflow = rmin_per_iflow_mats_exmax[0]
+    if name == 'gs-20':
+        ex_max = [0,0,0]
+        iflows_mats = {0:[8,10,12,14,16,18,20], 1:[8,10,12,14,16,18,20], 2:[8,10,12,14]}
+        rmin_per_iflow = rmin_per_iflow_mats_exmax[0]
+    if name == 'gs-21':
+        ex_max = [0,0,0]
+        iflows_mats = {0:[8,10,12,14,16,18,20,21], 1:[8,10,12,14,16,18,20,21], 2:[8,10,12,14]}
+        rmin_per_iflow = rmin_per_iflow_mats_exmax[0]
 
-    iflows_mats = iflows_mats_name(name)
+    if name == 'ex111-14':
+        ex_max = [1,1,1]
+        iflows_mats = {0:[8,10,12,14], 1:[8,10,12,14], 2:[8,10,12,14]}
+        rmin_per_iflow = rmin_per_iflow_mats_exmax[1]
+    if name == 'ex111-16':
+        ex_max = [1,1,1]
+        iflows_mats = {0:[8,10,12,14,16], 1:[8,10,12,14,16], 2:[8,10,12,14]}
+        rmin_per_iflow = rmin_per_iflow_mats_exmax[1]
+    if name == 'ex111-20':
+        ex_max = [1,1,1]
+        iflows_mats = {0:[8,10,12,14,16,18,20], 1:[8,10,12,14,16,18,20], 2:[8,10,12,14]}
+        rmin_per_iflow = rmin_per_iflow_mats_exmax[1]
+    if name == 'ex111-21':
+        ex_max = [1,1,1]
+        iflows_mats = {0:[8,10,12,14,16,18,20,21], 1:[8,10,12,14,16,18,20,21], 2:[8,10,12,14]}
+        rmin_per_iflow = rmin_per_iflow_mats_exmax[1]
+
+    def iflows_mats_name(name : str) -> dict[int, list[int]]:
+        iflowmax = int(name.split('-')[-1])
+        ifls01 = [ifl for ifl in [8,10,12,14,16,18,20,21] if ifl <= iflowmax]
+        return {0:ifls01, 1:ifls01, 2:[8,10,12,14]}
+
+    assert iflows_mats == iflows_mats_name(name)
+
 
  
 
@@ -742,15 +1116,16 @@ def sub_sums_bs():
 
     # plot tsums
     ###############################################
-    if 1:
+    if 0:
 
         nrows, ncols = 1, 2
         fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 5*nrows))
         axes = np.reshape(axes, shape=(nrows, ncols))
 
         subs  = [(0,1), (0,1,2)]
-        names = 'gs12 gs14 gs16 gs ex110 ex1'.split()
-        names = 'ex1 ex110 gs gs20 gs21'.split()
+        names = 'gs-18 ex110-18 ex111-18'.split()
+        names = 'gs-14 gs-16 gs-18 gs-20 gs-21'.split()
+        names = 'ex111-14 ex111-16 ex111-18 ex111-20 ex111-21'.split()
 
 
         for isub, sub in enumerate(subs):
@@ -779,6 +1154,271 @@ def sub_sums_bs():
 
         fig.tight_layout()
         fig.savefig(Path.cwd() / 'zeugs' / 'plots' / f'mats_sums_many.png', dpi=400)
+
+
+
+
+    # pretty plot for one-mass and two-mass comp (01 and 012)
+    ####################################################################
+    if 0:
+
+        nrows, ncols = 1, 2
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(wlatex, wlatex*0.5))
+        axes = np.reshape(axes, shape=(nrows, ncols))
+
+        names_left  = 'gs-18 ex111-18'.split()
+        names_right = 'gs-18 ex110-18 ex111-18'.split()
+        subs = [(0,1), (0,1,2)]
+
+
+        for isub, sub in enumerate(subs):
+            for iname, name in enumerate(names_left if isub==0 else names_right):
+                ax = axes[0,isub]
+
+                iflows = sorted(set.intersection(*(set(iflows_mats_name(name)[mats]) for mats in sub)))
+                x_list = [flt + iname*0.005 for flt in flowtimes[iflows]]
+                
+                tsums_ense = { iflow : np.array([(tsums01 if sub==(0,1) else tsums012)[iflow] for tsums01,tsums012,_,_ in bs_data[name]])
+                               for iflow in iflows }
+                tsums_data = gv.dataset.avg_data(tsums_ense, bstrap=True)
+                y_list = [tsums_data[ifl] for ifl in iflows]
+
+                ax.errorbar(
+                    x=x_list, y=gv.mean(y_list), yerr=gv.sdev(y_list),
+                    marker='o', alpha=(1 if iname in (0,2) else 0.85), linestyle='none', label=(['one-mass fit', 'two-mass fit'][iname] if isub==0 else ['one-mass fit', 'mixed fit', 'two-mass fit'][iname]),
+                )
+
+            ax.set_xlabel(r'flowtime $t / a^2$')
+
+            ax.set_ylabel(None)
+            ax.text(0.05, 0.95, rf'$H_{{E,t}}^{{{sub}}} / T^4$', transform=ax.transAxes, ha="left", va="top")
+        
+            ax.set_xlim(0, max(x_list) * 1.1)
+
+            if isub==0: ax.set_ylim(min(y.mean - y.sdev for y in y_list) * 1.1, 0)
+            if isub==1: ax.set_ylim(-0.038, 0.012)
+
+            ax.legend(
+                loc='upper right',
+                frameon=True,
+                facecolor='white',
+                edgecolor='none',
+                framealpha=0.6
+            )
+
+
+        fig.tight_layout()
+        fig.savefig(Path.cwd() / 'zeugs' / 'plots' / f'sub_corrs_01012.pdf', dpi=400)
+
+
+
+
+
+    # pretty plot for different included iflows
+    ####################################################################
+    if 0:
+
+        nrows, ncols = 1, 2
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(wlatex, wlatex*0.5))
+        axes = np.reshape(axes, shape=(nrows, ncols))
+
+        names_left  = 'gs-14 gs-16 gs-18 gs-20 gs-21'.split()
+        names_right = 'ex111-14 ex111-16 ex111-18 ex111-20 ex111-21'.split()
+        subs = [(0,1), (0,1)]
+
+
+        for isub, sub in enumerate(subs):
+            ax = axes[0,isub]
+
+            for iname, name in enumerate(names_left if isub==0 else names_right):
+
+                iflows = sorted(set.intersection(*(set(iflows_mats_name(name)[mats]) for mats in sub)))
+                x_list = [flt + iname*0.005 for flt in flowtimes[iflows]]
+                
+                tsums_ense = { iflow : np.array([(tsums01 if sub==(0,1) else tsums012)[iflow] for tsums01,tsums012,_,_ in bs_data[name]])
+                               for iflow in iflows }
+                tsums_data = gv.dataset.avg_data(tsums_ense, bstrap=True)
+                y_list = [tsums_data[ifl] for ifl in iflows]
+
+                ax.errorbar(
+                    x=x_list, y=gv.mean(y_list), yerr=gv.sdev(y_list),
+                    marker='o', alpha=0.85, markersize=5, linestyle='none', label=f'$t_\\text{{max}} = {flowtimes[int(name.split("-")[1])]:.2f}a^2$',
+                )
+
+            ax.set_xlabel(r'flowtime $t / a^2$')
+
+            ax.set_ylabel(None)
+            ax.text(0.05, 0.95, rf'$H_{{E, t}}^{{{sub}}} / T^4$', transform=ax.transAxes, ha="left", va="top")
+        
+            ax.set_xlim(0, max(x_list) * 1.1)
+
+            ax.set_ylim(-0.052, -0.01)
+
+            ax.legend(
+                loc='upper right',
+                frameon=True,
+                facecolor='white',
+                edgecolor='none',
+                framealpha=0.6,
+
+                fontsize=8,          # smaller text
+                handlelength=1.2,    # shorter line sample
+                handletextpad=0.4,   # space between marker and text
+                labelspacing=0.3,    # vertical spacing between entries
+                borderpad=0.3,       # padding inside box
+                borderaxespad=0.3    # distance from axes
+            )
+
+            ax.set_title(f'{"one" if isub==0 else "two"}-mass fits')
+
+
+        fig.tight_layout()
+        fig.savefig(Path.cwd() / 'zeugs' / 'plots' / f'sub_corrs_viflows.pdf', dpi=400)
+
+
+
+
+    # t ------> 0  extrapolation
+    ####################################################################
+    if 0:
+
+        iflows = [8,10,12,14,16,18]
+
+        nrows, ncols = 1, 1
+        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(0.75*wlatex, 0.75*wlatex*0.6))
+
+
+        plot_corrs = False
+        if plot_corrs:
+            fig2, axes2 = plt.subplots(1, 2, figsize=(wlatex, 0.55 * wlatex), constrained_layout=True)
+            ims = []
+            flow_labels = [f"{flowtimes[ifl]:.2f}" for ifl in iflows]
+
+        
+
+        for iname, name in enumerate('gs-18 ex111-18'.split()):
+            fit_name = 'one-mass fit' if iname==0 else 'two-mass fit'
+            color = ['blue', 'green'][iname]
+
+            tsums_ense = { iflow : np.array([tsums01[iflow] for tsums01,_,_,_ in bs_data[name]])
+                           for iflow in iflows }
+            tsums_data = gv.dataset.avg_data(tsums_ense, bstrap=True)
+
+            y6 = [tsums_data[ifl] for ifl in iflows]
+            x6 = np.array([flowtimes[ifl] for ifl in iflows], dtype=float)
+
+            x_offset = iname*0.005
+            x6s = np.asarray(x6, float) + x_offset  # offset for visual distinction
+
+            # fit only first three points
+            x3 = x6[:3]
+            y3 = y6[:3]
+
+            # linear model
+            def fcn(x, p):
+                return p['a'] + p['b'] * x
+            
+            fit = lsqfit.nonlinear_fit(
+                data=(x3, y3),
+                p0={'a':0, 'b':0},
+                fcn=fcn,
+                # linear=['a', 'b'],
+            )
+
+            # extrapolated value at t=0
+            y0 = fit.p['a']
+            print(f'{y0=}, {fit.Q=:.2f}')
+
+            # line from the 3rd point down to 0
+            x_line = np.linspace(0.0, x3[2], 200)
+            y_line = fcn(x_line, fit.pmean)
+
+            ax.errorbar(
+                x6s,
+                gv.mean(y6),
+                yerr=gv.sdev(y6),
+                marker='o',
+                linestyle='none',
+                color=color,
+                alpha=0.9,
+                markersize=5,
+                # label=f'data ({fit_name})',
+                label = fit_name
+            )   
+            ax.plot(
+                x_line + x_offset,
+                y_line,
+                linestyle='--',
+                color=color,
+                alpha=0.9,
+                # label=f'fit ({fit_name})',
+            )
+            ax.errorbar(
+                [0.0 + x_offset],
+                [gv.mean(y0)],
+                yerr=[gv.sdev(y0)],
+                marker='s',
+                linestyle='none',
+                color=color,
+                alpha=0.9,
+                # label=f'$t=0$ extrapolation ({fit_name})',
+            )
+            ax.set_xlabel('$t/a^2$')
+            ax.set_ylabel(None)
+            ax.text(0.05, 0.95, rf'$H_{{E,t}}^{{(0,1)}} / T^4$', transform=ax.transAxes, ha="left", va="top")
+            ymin, _ = ax.get_ylim()
+            ax.set_ylim(ymin, 0.0)
+            ax.legend(
+                loc='upper right',
+                frameon=True,
+                facecolor='white',
+                edgecolor='none',
+                framealpha=0.7,
+                # fontsize=8,
+                # labelspacing=0.3,
+                # borderpad=0.3,
+                # handletextpad=0.4,
+                # handlelength=1.2,
+            )
+
+
+            if plot_corrs:
+                ax2 = axes2[iname]
+                corr = gv.evalcorr(y6)  # (6,6) correlation matrix
+
+                im = ax2.imshow(
+                    corr,
+                    origin="upper",
+                    cmap="coolwarm",
+                    vmin=0, vmax=1,
+                    interpolation="nearest",
+                    aspect="equal",
+                )
+                ims.append(im)
+
+                ax2.set_title(f'Correlations of $H_{{E,t}}^{{(0,1)}}$ in $t$\n({fit_name})')
+
+                ax2.set_xticks(range(len(iflows)))
+                ax2.set_yticks(range(len(iflows)))
+                ax2.set_xticklabels(flow_labels, rotation=45, ha="right")
+                ax2.set_yticklabels(flow_labels)
+
+                ax2.set_xlabel(r"$t/a^2$")
+                ax2.set_ylabel(r"$t/a^2$")
+
+
+        out = Path.cwd() / "zeugs" / "plots" / "tsums_linear_extrap.pdf"
+        fig.savefig(out, bbox_inches="tight")
+        plt.close(fig)
+
+
+        if plot_corrs:
+            cbar = fig2.colorbar(ims[-1], ax=axes2[-1], pad=0.08, fraction=0.046)
+            cbar.set_label("correlation")
+
+            out = Path.cwd() / "zeugs" / "plots" / "tsums_corr_1x2.pdf"
+            fig2.savefig(out, bbox_inches="tight")
+            plt.close(fig2)
 
 
 
@@ -1772,7 +2412,7 @@ def fits_manym_bs():
 
 
 
-main = mass_rmin
+main = sub_sums_bs
 
 
 
