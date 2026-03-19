@@ -153,7 +153,90 @@ def main_visdata():
 
     # finalize and save plots
     fig.tight_layout()
-    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'gridmats.png', dpi=400)
+    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'gridmats.png', dpi=400)   
+
+
+
+
+def vis_binning():
+
+    # get correlators  G(w_n, r) / T^7
+    print('loading correlator data...')
+    ense_all = get_data_mats_unbinned()
+    print(ense_all.shape, ense_all.dtype)
+
+    # get distances
+    dist = radial_separations(ns)
+
+    # bin with constant r bins
+    bin_size = 0.001
+    bins = find_distance_bins(dist, bin_size)
+    dist_binned, = bin_averages(bins, dist)
+
+    # flowtime
+    iflow_o = 12
+    mats = 1
+    print(f't_f = {flowtimes[iflow_o]} a^2, r_f = {flowtime_to_radius(flowtimes[iflow_o], nt) * nt} a')
+
+
+    fig, axes = plt.subplots(1,2, figsize=(5*2, 4*1))
+
+
+    ense_m1    = ense_all[:, iflow_o, mats, :]
+    ense_m1_b, = bin_averages(bins, ense_m1)
+    data_m1    = gv.dataset.avg_data(ense_m1_b)
+
+    plot_dist(dist_binned, data_m1, axes[0])
+    axes[0].set_ylabel('$G/T^7$')
+    axes[0].set_xlim(5.5, 25)
+    axes[0].set_ylim(-0.1, 0.02)
+
+
+
+    fss = FitSubSum(bs=False)
+    fss.iflows[mats] = [8,10,12,14,16,18]
+    ex_max = 1
+
+    rmin_per_iflow_mats_exmax : list[list[dict[int,float]]] = [
+        [   # ex_max = 0
+            {8:10.5, 10:11, 12:11.5, 14:12, 16:12.5, 18:13, 20:14, 21:15},  # mats = 0
+            {8:7.5, 10:7.5, 12:8, 14:8.5, 16:9, 18:9.5, 20:10, 21:10.5},    # mats = 1
+            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                        # mats = 2
+        ],
+        # [   # ex_max = 1
+        #     {8:9, 10:9, 12:10.5, 14:11, 16:11.5, 18:11.5, 20:12, 21:13},    # mats = 0
+        #     {8:6.5, 10:7, 12:7.5, 14:8, 16:9, 18:9.5, 20:10, 21:11},        # mats = 1
+        #     {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                        # mats = 2
+        # ],
+        [   # ex_max = 1
+            {8:6, 10:6.5, 12:6.5, 14:7, 16:7.5, 18:8, 20:9, 21:10},    # mats = 0
+            {8:6.5, 10:6.5, 12:7, 14:7.5, 16:8, 18:8.5, 20:9, 21:10},        # mats = 1
+            {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                        # mats = 2
+        ]
+    ]
+
+    rmin_per_iflow = rmin_per_iflow_mats_exmax[ex_max][mats]
+    fss.do_fit_one_mat_diff_rmin(mats, rmin_per_iflow, ex_max, printfits=True)
+    fss.do_sums_for_mats(mats_vals=(1,), printsums=False)
+
+    cbin_size = 0.25
+    cbins = find_distance_bins(fss.dist, cbin_size)
+    dist_b, = bin_averages(cbins, fss.dist)
+
+    r_left, r_right = fss.fitstuff_mats[mats].rlims[iflow_o,mats]
+    ir_left, ir_right = index_from_distance(fss.dist, r_left), index_from_distance(fss.dist, r_right)
+
+    plot_dist(fss.fitstuff_mats[mats].fit.x[iflow_o,mats], fss.fitstuff_mats[mats].fit.y[iflow_o,mats], axes[1], label=f'data', alpha=0.7)
+    axes[1].set_ylabel('$G/T^7$')
+    axes[1].set_xlim(5.5, 25)
+    axes[1].set_ylim(-0.08, 0.02)
+
+
+    # finalize and save plots
+    fig.tight_layout()
+    fig.savefig(Path.cwd() / 'zeugs' / 'plots' / 'abc_bins.png', dpi=400)   
+
+
 
 
 
@@ -992,7 +1075,7 @@ def sub_sums_bs():
     ]
 
 
-    name = 'ex111-20'
+    name = 'ex111-21'
 
 
     if name == 'gs-18':
@@ -2412,7 +2495,7 @@ def fits_manym_bs():
 
 
 
-main = sub_sums_bs
+main = vis_binning
 
 
 
