@@ -87,6 +87,16 @@ def extract_flowtimes(flow_measurements : FlowMeasurements) -> list[float]:
 
 
 
+def flowtime_to_radius(t : float, Nt : int) -> float:
+    '''Given flowtime in units of a^2, and number of time divisions, compute flow radius in units of beta.'''
+    return (8 * t)**.5 / Nt
+
+
+def radius_to_flowtime(r : float, Nt : int) -> float:
+    '''Given flow radius in units of beta, and number of time divisions, compute flowtime in units of a^2.'''
+    return (r * Nt)**2 / 8
+
+
 
 
 
