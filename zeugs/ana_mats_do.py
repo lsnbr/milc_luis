@@ -13,7 +13,7 @@ import scienceplots
 plt.style.use('science')
 plt.rcParams.update({
     'font.size' : 10,
-    'text.usetex' : False
+    'text.usetex' : True
 })
 
 from flowing import flowtime_to_radius
@@ -315,7 +315,7 @@ def vis_correlations():
     )
     # axes[0].set_xlabel(r"$r / a$")
     # axes[0].set_ylabel(r"$r / a$")
-    axes[0].set_title(f"mode 1, $t={flow_r:.2f} a^2$")
+    axes[0].set_title(f"mode 1, $t_\\mathrm{{f}}={flow_r:.2f} a^2$")
 
     # ----- MIDDLE: cross r-corr -----
     im1 = axes[1].imshow(
@@ -343,7 +343,7 @@ def vis_correlations():
     )
     # axes[1].set_xlabel(r"$r / a$")
     # axes[1].set_ylabel(r"$r / a$")
-    axes[1].set_title(f"mode 0 vs 1, $t={flow_r:.2f} a^2$")
+    axes[1].set_title(f"mode 0 vs 1, $t_\\mathrm{{f}}={flow_r:.2f} a^2$")
 
     # ----- RIGHT: flowtime corr -----
     im2 = axes[2].imshow(
@@ -367,7 +367,7 @@ def vis_correlations():
     axes[2].set_xlabel(None) 
     axes[2].set_ylabel(None) 
     axes[2].text(
-        0.05, 0.05, r"$t/a^2$",
+        0.05, 0.05, r"$t_\mathrm{f}/a^2$",
         transform=axes[2].transAxes,
         ha="left", va="bottom",
         color="black",
@@ -423,6 +423,7 @@ def vis_sub_integrands():
     ax.plot(x, xS012(x), label=r"$h^{(0,1,2)}$")
 
     ax.set_xlim(x_min, x_max)
+    ax.set_ylim(0, None)
     ax.set_xlabel(r"$\omega'/T$")
     ax.set_ylabel(r"kernel $h$")
 
@@ -844,7 +845,7 @@ def mass_rmin():
 
 
     # pretty plots for sinh fit and data
-    if 0:
+    if 1:
 
         fss = FitSubSum(bs=False)
         fss.iflows[1] = [8,10,12,14,16,18]
@@ -2495,7 +2496,7 @@ def fits_manym_bs():
 
 
 
-main = vis_binning
+main = mass_rmin
 
 
 

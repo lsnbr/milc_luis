@@ -63,7 +63,7 @@ def signal_to_noise_cut(data : np.ndarray, sn_cut : float) -> int|None:
 
 
 def index_max_error(data : np.ndarray, err_max : float) -> int:
-    '''finds the index i, such that d[j].sdev > err_max for all j >= i.'''
+    '''finds the index i, such that data[j].sdev > err_max for all j >= i.'''
 
     for i, d in enumerate(data[::-1]):
         if d.sdev <= err_max:
@@ -100,7 +100,7 @@ def expx(x : float, a : float, m : float) -> float:
 def bin_data_through_fit(dist : np.ndarray, ense : np.ndarray, reltol : float, max_bin_size : float|None = None, axes : list[plt.Axes]|None = None) -> tuple[Bins, lsqfit.nonlinear_fit]:
     '''1. Bin data with constant bin size.
     2. Do fit (ignoring correlations for performance since only rough shape of fit is needed) starting at data with s/n < sn_cut (after binning).
-    3. Find new bins such that bin_error is neglectable compared to data error.
+    3. Find new bins such that bin_error is negligible compared to data error.
     4. If visualize, axes should be length 2.'''
 
     cbin_size = 1       # bin size for preliminary fit
