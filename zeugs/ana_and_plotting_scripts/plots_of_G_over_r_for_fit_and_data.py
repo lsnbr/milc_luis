@@ -2,19 +2,7 @@ import numpy as np
 from import_and_plotting_tech import *
 
 
-
-rmin_per_iflow_mats_exmax : list[list[dict[int,float]]] = [
-    [   # ex_max = 0
-        {8:10.5, 10:11, 12:11.5, 14:12, 16:12.5, 18:13, 20:14, 21:15},  # mats = 0
-        {8:7.5, 10:7.5, 12:8, 14:8.5, 16:9, 18:9.5, 20:10, 21:10.5},    # mats = 1
-        {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                        # mats = 2
-    ],
-    [   # ex_max = 1
-        {8:6, 10:6.5, 12:6.5, 14:7, 16:7.5, 18:8, 20:9, 21:10},         # mats = 0
-        {8:6.5, 10:6.5, 12:7, 14:7.5, 16:8, 18:8.5, 20:9, 21:10},       # mats = 1
-        {8:6+1/3, 10:6+1/3, 12:6+2/3, 14:6+2/3},                        # mats = 2
-    ]
-]
+from some_intermediate_results import rmin_per_iflow_mats_exmax
 
 
 
@@ -25,25 +13,32 @@ fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(wlatex, wlatex/ncols
 axes = np.reshape(axes, shape=(nrows, ncols))
 
 
+
+
 # gs (ex_max=0) fit
-if 0:
+if 1:
     ex_max = 0
     iflows_for_mats = [(8,18), (8,18), (8,14)]
     xlim_mats = [(8,30), (6,20), (5,15)]
     ylim_iifl_mats = [[(-0.0175,0.002),(-0.0055,0.0005)], [(-0.045, 0.005),(-0.0085,0.001)], [(-0.0325,0.005),(-0.025,0.0025)]]
 
 # ex1 (ex_max=1) fit
-if 1:
+if 0:
     ex_max = 1
     iflows_for_mats = [(8,18), (8,18), (8,14)]
     xlim_mats = [(4.5,20), (4.5,18), (4.5,15)]
     ylim_iifl_mats = [[(-0.38,0.02),(-0.08,0.005)], [(-0.12,0.01),(-0.018,0.0018)], [(-0.029,0.0025),(-0.027,0.002)]]
 
 
+
+
 fss = FitSubSum(bs=False)
 fss.iflows[0] = [8,10,12,14,16,18] #+ [20,21]
 fss.iflows[1] = [8,10,12,14,16,18] #+ [20,21]
 fss.iflows[2] = [8,10,12,14]
+
+
+
 
 for mats in (0,1,2):
     fss.do_fit_one_mat_diff_rmin(mats, rmin_per_iflow_mats_exmax[ex_max][mats], ex_max=ex_max, printfits=True)
@@ -68,6 +63,7 @@ for mats in (0,1,2):
 
         ax.legend(loc='lower right')
         ax.set_title(f'$n={mats}$, $t={flowtimes[ifl]:.2f}a^2$')
+
 
 
 

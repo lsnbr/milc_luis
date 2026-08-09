@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from flowing import flowtime_to_radius, radius_to_flowtime
 from measurements import *
 from statana import *
-from ana_tail import make_prior_constr, expx_single_mats, plot_flowtime_and_tau_fits, p_mats, make_prior_many_mats, sum_lin, make_prior_uniform_many_mats, make_p0_many_mats
+from ana_tail import *
 
 
 
