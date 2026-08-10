@@ -194,7 +194,7 @@ class FitSubSum:
                 tsum, psum = sum_lin(ense_int, (lambda x: gv.mean(self.fitfcn_sinh(iflow, mats, x))), rleft, rright, self.psums_binsize)
                 self.tsums_sinh[iflow, mats] = tsum
                 self.psums_sinh[iflow, mats] = psum
-                if printsums: print(f'total sum ({mats=}) ({iflow=}) = {tsum:.3f} T^4')
+                if printsums: print(f'total sum ({mats=}) ({iflow=}) = {tsum:.5f} T^4')
 
 
 
