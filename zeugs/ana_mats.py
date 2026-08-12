@@ -45,7 +45,7 @@ class FitStuff:
 
 class FitSubSum:
 
-    def __init__(self, bs : bool = False, printinit : bool = True) -> None:
+    def __init__(self, bs : bool = False, printinit : bool = True, **kwargs : Any) -> None:
         '''Setting up ense and dist, and other variables.'''
 
         # get correlators  G(w_n, r) / T^7
@@ -86,7 +86,7 @@ class FitSubSum:
         self.rleft_sinh  = {}
         self.rright_sinh = {}
 
-        self.psums_binsize = 0.5
+        self.psums_binsize = 0.25 if 'psums_binsize' not in kwargs else kwargs['psums_binsize']
         self.dist_psums    = bin_distances(ns, self.psums_binsize)
         
 

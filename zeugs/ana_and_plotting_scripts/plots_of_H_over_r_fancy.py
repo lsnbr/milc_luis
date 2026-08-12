@@ -2,12 +2,10 @@ from import_and_plotting_tech import *
 import matplotlib.patches as mpatches
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 
-
 from ensemble_data import data_16_x_64_1p5Tc as data_ense
 nt = data_ense['nt']
 ns = data_ense['ns']
 flowtimes = data_ense['flowtimes']
-
 
 from some_intermediate_results import rmin_per_iflow_mats_exmax
 
