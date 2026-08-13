@@ -156,7 +156,7 @@ class FitSubSum:
 
 
 
-    def do_sums_for_sub_from_mats(self, sub : Iterable[int]) -> dict[int, float]:
+    def do_sums_for_sub_from_mats(self, sub : Iterable[int], printsums : bool = True) -> dict[int, float]:
         '''use sum ove mats sinh for sub sums'''
 
         res = {}
@@ -164,7 +164,8 @@ class FitSubSum:
         for iflow in self.get_common_iflows(sub):
             tsum = mats_subtraction(sub, [self.tsums_sinh[iflow, mats] for mats in sub])
             res[iflow] = tsum
-            print(f'sum {sub} = {tsum:.3f} T^4')
+            self.tsums_sub[sub, iflow] = tsum
+            if printsums: print(f'sum {sub} = {tsum:.3f} T^4')
 
         return res
 
