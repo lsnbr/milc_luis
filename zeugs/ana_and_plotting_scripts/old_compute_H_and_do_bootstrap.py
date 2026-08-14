@@ -26,7 +26,7 @@ else:
 from some_intermediate_results import rmin_per_iflow_mats_exmax
 
 
-name = 'ex111-21'
+name = 'gs-18'
 
 
 if name == 'gs-18':

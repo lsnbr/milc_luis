@@ -7,7 +7,7 @@ from some_intermediate_results import rmin_per_iflow_mats_exmax
 
 ex_max = 0
 
-fss = FitSubSum(bs=False, psums_binsize=0.1)
+fss = FitSubSum(bs=False, psums_binsize=0.2)
 fss.iflows[0] = [11,12,14,16,18]
 fss.iflows[1] = [11,12,14,16,18]
 fss.iflows[2] = [11,12,14]

@@ -209,7 +209,8 @@ def bin_in_r_through_fcn_and_data(dist : np.ndarray, ense : np.ndarray, fcn : Ca
         # bin_error  = np.max(bin_vals) - np.min(bin_vals)          # alternative, more conservative definition of bin_error
 
         cov_sum += cov[i_left:i, i-1].sum() + cov[i-1, i_left:i-1].sum()
-        data_error = np.sqrt(cov_sum) / (i - i_left)
+        if cov_sum < 0: raise Exception(f'negative covsum! {cov_sum=}, i={i-1}, r={dist[i-1]}')
+        data_error = np.sqrt(max(0,cov_sum)) / (i - i_left)
 
         if (max_bin_size is not None and dist[i-1] - dist[i_left] > max_bin_size) or (bin_error / data_error > reltol):
             bins.append((i_left, i-1))

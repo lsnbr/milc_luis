@@ -65,10 +65,12 @@ def do_computation(bs : bool, printstuff : bool = False) -> ResultData:
 
 
 
+
+
 pickle_path = Path.cwd() / 'zeugs' / 'data' / 'bs_H.pkl'
-do_comp = True      # compute new bootstrap samples if True
+do_comp = False      # compute new bootstrap samples if True
 restart = False     # delete old bootstrap samples if True else append to them
-n_bs    = 100       # number of new bootstrap samples to compute if do_comp==True
+n_bs    = 850        # number of new bootstrap samples to compute if do_comp==True
 
 if (not do_comp) or (not restart and pickle_path.exists()):
     with open(pickle_path, 'rb') as f:
@@ -88,29 +90,49 @@ print('Number of bootstrap samples =', len(bs_data), end='\n\n\n')
 
 
 
-# fitting paramters from bootstrap ensemble (only for ex_max=0 right now)
-p_ense = {}
-for mats in mats_list:
-    p_ense[f'm_{mats}'] = [rd.pmean[mats][f'm_0_{mats}'] for rd in bs_data]
-    for iflow in iflows_mats[mats]:
-        p_ense[f'a_{mats}_{iflow}'] = [rd.pmean[mats][f'a_{iflow}_0_{mats}'] for rd in bs_data]
-p_data = gv.dataset.avg_data(p_ense, bstrap=True)
+
+
+# compute fitting params and H's with errors from bootstrap ensemble? (or load data)
+do_comp = False
+pickle_path = Path.cwd() / 'zeugs' / 'data' / 'av_H.pkl'
+
+
+if do_comp:
+    # fitting paramters from bootstrap ensemble (only for ex_max=0 right now)
+    p_ense = {}
+    for mats in mats_list:
+        p_ense[f'm_{mats}'] = [rd.pmean[mats][f'm_0_{mats}'] for rd in bs_data]
+        for iflow in iflows_mats[mats]:
+            p_ense[f'a_{mats}_{iflow}'] = [rd.pmean[mats][f'a_{iflow}_0_{mats}'] for rd in bs_data]
+    p_data = gv.dataset.avg_data(p_ense, bstrap=True)
+
+    # H_n and H_sub from bootstrap ensemble
+    H_ense = {}
+    for mats in mats_list:
+        for iflow in iflows_mats[mats]:
+            H_ense[f'H_{mats}_{iflow}'] = [rd.tsums_mats[iflow,mats] for rd in bs_data]
+    for sub in sub_list:
+        for iflow in set.intersection(*(set(iflows_mats[mats]) for mats in sub)):
+            H_ense[f'H_{sub}_{iflow}'] = [rd.tsums_subs[sub,iflow] for rd in bs_data]
+    H_data = gv.dataset.avg_data(H_ense, bstrap=True)
+
+    # save data
+    with pickle_path.open('wb') as f:
+        gv.dump((p_data, H_data), f)
+
+else:
+    with open(pickle_path, 'rb') as f:
+        p_data, H_data = gv.load(f)
+
+
+
+
 
 # print fitting parameters
 for mats in mats_list:
     print(f'n={mats}:  m=' + str(p_data[f'm_{mats}']), end='  ')
     print(' '.join(f'a({flowtimes[iflow]:.2f})={p_data[f"a_{mats}_{iflow}"]}' for iflow in iflows_mats[mats]))
 print('\n')
-
-# H_n and H_sub from bootstrap ensemble
-H_ense = {}
-for mats in mats_list:
-    for iflow in iflows_mats[mats]:
-        H_ense[f'H_{mats}_{iflow}'] = [rd.tsums_mats[iflow,mats] for rd in bs_data]
-for sub in sub_list:
-    for iflow in set.intersection(*(set(iflows_mats[mats]) for mats in sub)):
-        H_ense[f'H_{sub}_{iflow}'] = [rd.tsums_subs[sub,iflow] for rd in bs_data]
-H_data = gv.dataset.avg_data(H_ense, bstrap=True)
 
 # print H_n and H_sub
 col0_width, col_width = 8, 14

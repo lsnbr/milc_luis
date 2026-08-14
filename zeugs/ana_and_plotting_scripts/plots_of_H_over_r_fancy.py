@@ -15,16 +15,16 @@ from some_intermediate_results import rmin_per_iflow_mats_exmax
 # which correlators to plot
 ex_max      = 0
 mats_list   = [1,2]
-iflows_mats = {1:[14,18], 2:[10,14]}
+iflows_mats = {1:[14,18], 2:[11,14]}
 
 # prepare figures
 fig, axs = plt.subplots(1, len(mats_list), figsize=(wlatex, 0.8*hlatex), constrained_layout=True)
 
 # prepare fitting and summing (summing since there r1 is computed)
 fss = FitSubSum(bs=False)
-fss.iflows[0] = [12,14,16,18]
-fss.iflows[1] = [12,14,16,18]
-fss.iflows[2] = [8,10,12,14]
+fss.iflows[0] = [11,12,14,16,18]
+fss.iflows[1] = [11,12,14,16,18]
+fss.iflows[2] = [11,12,14]
 
 # constant sized bins
 cbin_size = 0.25
@@ -88,7 +88,7 @@ for j, mats in enumerate(mats_list):
 
     # define outside plot limits
     ax.set_xlim({1:(-0.45,18),   2:(-0.45,11) }[mats])
-    ax.set_ylim({1:(-0.35,0.65),  2:(-0.9,1.45)}[mats])
+    ax.set_ylim({1:(-0.35,0.65), 2:(-0.7,1.23)}[mats])
 
     # pull y-tick numbers to the inside of the panel for outside plots
     ax.tick_params(axis='y', direction='in', pad=-5)
