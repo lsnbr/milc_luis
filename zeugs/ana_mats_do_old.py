@@ -16,7 +16,6 @@ plt.rcParams.update({
     'text.usetex' : True
 })
 
-from flowing import flowtime_to_radius
 from measurements import *
 from statana import *
 from ana_mats import FitStuff, FitSubSum, build_integrand, mats_subtraction, plot_dist_many

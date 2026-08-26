@@ -9,7 +9,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from flowing import flowtime_to_radius, radius_to_flowtime
 from measurements import *
 from statana import *
 from ana_tail import *
@@ -768,24 +767,3 @@ def mats_subtraction(sub : tuple[int], datas : Iterable[np.ndarray]) -> np.ndarr
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-if __name__ == '__main__':
-
-    ...

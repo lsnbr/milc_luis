@@ -97,59 +97,124 @@ def expx(x : float, a : float, m : float) -> float:
 ###############################################################################
 
 
-def bin_data_through_fit(dist : np.ndarray, ense : np.ndarray, reltol : float, max_bin_size : float|None = None, axes : list[plt.Axes]|None = None) -> tuple[Bins, lsqfit.nonlinear_fit]:
-    '''1. Bin data with constant bin size.
-    2. Do fit (ignoring correlations for performance since only rough shape of fit is needed) starting at data with s/n < sn_cut (after binning).
-    3. Find new bins such that bin_error is negligible compared to data error.
-    4. If visualize, axes should be length 2.'''
+def bin_averages(bins : Bins, *arrays : np.ndarray) -> tuple[np.ndarray]:
+    '''Bin values and compute its averages. If array has D>1, the last dimension is binned.'''
 
-    cbin_size = 1       # bin size for preliminary fit
-    sn_cut    = 10      # s/n cut for (constant bin size) binned data in preliminary fit
+    arrays_binned = []
 
-    cbins = find_distance_bins(dist, cbin_size)
-    dist_cbinned, ense_cbinned = bin_averages(cbins, dist, ense)
-    data_cbinned = gv.dataset.avg_data(ense_cbinned)
+    for arr in arrays:
+        new_dtype = float if np.issubdtype(arr.dtype, np.integer) else arr.dtype
+        arr_binned = np.empty(shape=(*arr.shape[:-1], len(bins)), dtype=new_dtype)
 
-    ir_cut = signal_to_noise_cut(data_cbinned, sn_cut)
-    f = lambda x, p: expx_fcn(x, [p['a']], [p['m']])
-    fit = lsqfit.nonlinear_fit(
-        udata = (dist_cbinned[ir_cut:], data_cbinned[ir_cut:]),
-        fcn   = f,
-        p0    = {'a' : -1, 'm' : 1}
-    )
+        for ibin, (il, ir) in enumerate(bins):
+            arr_binned[..., ibin] = arr[..., il:ir].mean(axis=-1)
 
-    vbins = bin_in_r_through_fcn_and_data(dist, ense, lambda r: f(r, fit.pmean), reltol, max_bin_size)
+        arrays_binned.append(arr_binned)
 
-    # optional plotting
-    if axes is not None:
-        plot_dist(dist_cbinned[ir_cut:], data_cbinned[ir_cut:], axes[0])
-        plot_fitfcn(dist_cbinned[ir_cut:], f(dist_cbinned[ir_cut:], fit.p), axes[0])
-        for il,_ in vbins:
-            axes[0].axvline(x=dist[il], color='orange', alpha=0.75)
-        axes[0].legend()
-        axes[0].set_title(f'Data and fit is based on constant Δr={cbin_size} bins, vertical lines are bins based on fit.')
-        axes[1].axis('off')
-        axes[1].text(0, 1, f'{fit}\n\nnumber of bins = {len(vbins)}', family="monospace", va="top")
-
-    return vbins, fit
+    return tuple(arrays_binned)
 
 
 
 
 
 
-def bin_multiple_series_through_fit(dist : np.ndarray, ense : np.ndarray, labels : dict[Any, str], reltol : float, max_bin_size : float|None = None) -> dict[Any, Bins]:
-    '''For all r-series (ense.shape[1:-1]) do binning by fit.'''
+def find_distance_bins(distances : np.ndarray, bin_size : float) -> Bins:
+    '''Finds indx pairs (il, ir) such that distances[il:ir] contain distances in a range of bin_size.
+    Assumes distances is non-empty and monotonically rising.'''
 
-    bins : dict[Any, Bins] = {}
+    bins = []
 
-    for idx in labels.keys():
-        bins[idx], fit_for_binning = bin_data_through_fit(dist, ense[:, *idx, :], reltol, max_bin_size)
+    # current bin (index and distance of left side)
+    il = 0
+    rl = distances[0]
 
-        if fit_for_binning.pmean['a'] > 0 or fit_for_binning.pmean['m'] < 0:
-            raise Exception(f'Bad preliminary fit for {idx=}:\n{fit_for_binning}')
-        
+    for i, r in enumerate(distances):
+        if r < rl + bin_size:
+            continue
+
+        bins.append((il, i))
+        while r >= rl + bin_size:
+            rl += bin_size
+        il = i
+
+    return bins + [(il, len(distances))]
+
+
+
+
+
+def bin_distances(ns : int, bin_size : float) -> np.ndarray:
+    '''Average distances of each bin.'''
+
+    distances = radial_separations(ns)
+    return bin_averages(
+        find_distance_bins(distances, bin_size),
+        distances
+    )[0]
+
+
+
+
+
+def bin_in_r_through_fcn_and_data(dist : np.ndarray, ense : np.ndarray, fcn : Callable[[float], float], reltol : float, max_bin_size : float|None = None) -> Bins:
+    '''Finds bins such that  bin_error / data_error <= reltol.
+    Here, bin_error = |(mean of values at bin-points) - (val at mean-point of bin)|.'''
+
+    cov = np.cov(ense, rowvar=False) / ense.shape[0]      # covariances of the means
+
+    bins    = []
+    i_left  = 0
+    i_start = 1
+    cov_sum = 0
+
+    # prevent potential div by 0
+    if dist[0] == 0:
+        bins.append((0,1))
+        i_left = 1
+        i_start += 1
+
+    for i in range(i_start, len(dist)+1):
+
+        rbin      = dist[i_left:i].mean()
+        bin_vals  = fcn(dist[i_left:i])
+        bin_error = abs(bin_vals.mean() - fcn(rbin))
+        # bin_error  = np.max(bin_vals) - np.min(bin_vals)          # alternative, more conservative definition of bin_error
+
+        cov_sum += cov[i_left:i, i-1].sum() + cov[i-1, i_left:i-1].sum()
+        if cov_sum < 0: raise Exception(f'negative covsum! {cov_sum=}, i={i-1}, r={dist[i-1]}')
+        data_error = np.sqrt(max(0,cov_sum)) / (i - i_left)
+
+        if (max_bin_size is not None and dist[i-1] - dist[i_left] > max_bin_size) or (bin_error / data_error > reltol):
+            bins.append((i_left, i-1))
+            i_left = i-1
+            cov_sum = 0
+
+    bins.append((i_left, i))
     return bins
+
+
+
+
+
+def bin_by_distance(distances : np.ndarray, values : np.ndarray, cov : np.ndarray|None, bin_size : float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    '''Bin-averages values in bins of r-extent bin_size, computing standart deviations using the covariance matrix cov.
+    Returns [bin-averages of distances], [bin-averages of values], [stderr of bin-averages]. The last on only if cov is not None.'''
+
+    bins = find_distance_bins(distances, bin_size)
+
+    r_bins = np.empty(shape=(len(bins),), dtype=float)
+    v_bins = np.empty(shape=(len(bins),), dtype=float)
+    e_bins = np.empty(shape=(len(bins),), dtype=float)
+
+    for i, (il, ir) in enumerate(bins):
+        r_bins[i] = np.mean(distances[il:ir])
+        v_bins[i] = np.mean(values[il:ir])
+        if cov is not None:
+            n   = ir - il
+            var = cov[il:ir, il:ir].sum() / (n*n)
+            e_bins[i] = np.sqrt(var)
+
+    return r_bins, v_bins, e_bins
 
 
 

@@ -27,3 +27,18 @@ wlatex = latex_width_pts / 72.27
 
 golden_ratio = (5**0.5 - 1) / 2
 hlatex = wlatex * golden_ratio
+
+
+
+
+@dataclass
+class ResultData:
+    
+    pmean  : dict[int, dict]                # mats  -->  fit parameter dict
+    rleft  : dict[tuple[int,int], float]    # (iflow, mats)  -->  r0
+    rright : dict[tuple[int,int], float]    # (iflow, mats)  -->  r1
+
+    tsums_mats : dict[tuple[int,int], float]                # (iflow, mats)  -->  H(n)
+    tsums_subs : dict[tuple[tuple[int,...],int], float]     # (sub, iflow)   -->  H_sub
+
+    psums_mats : dict[tuple[int,int], np.ndarray]       # (iflow, mats)  -->  partial sums of H(n)

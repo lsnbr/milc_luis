@@ -79,29 +79,6 @@ def gen_configs_ora( configs : int, every_nth : int, beta : float,
 
 
 
-
-def flowtime_to_radius(t : float, Nt : int) -> float:
-    '''Given flowtime in units of a^2, and number of time divisions, compute flow radius in units of beta.'''
-    return (8 * t)**.5 / Nt
-
-
-def radius_to_flowtime(r : float, Nt : int) -> float:
-    '''Given flow radius in units of beta, and number of time divisions, compute flowtime in units of a^2.'''
-    return (r * Nt)**2 / 8
-
-
-def flow_params(n_steps : int, Nt : int, r_max : float = 0.25) -> tuple[float, float]:
-    '''Given amnount of steps ([0,1,2] has two steps), number of time divisions and maximal flow radius in units of beta,
-    computes (stoptime, stepsize) parameters in lattice units.'''
-
-    stoptime = radius_to_flowtime(r_max, Nt)
-    stepsize = stoptime / n_steps
-    return stoptime, stepsize
-
-
-
-
-
 def flow_in_steps(flow_times : List[float], lat_initial : Path, input_initial : str, flow : str, run_cmd : list[str]) -> str:
     '''Flows lat_initial to flow times (rkmk3).
     input_initial: prompt, nx, ny, nz, nt.'''

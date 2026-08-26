@@ -3,8 +3,9 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt # type: ignore
 
-from flowing import flow_rkmk3, flow_adpt, flow_params, gen_input_initial, radius_to_flowtime, flowtime_to_radius
-from measurements import parse_flow_output, make_distance_corr_arrays, radial_separations, radial_multiplicities, bin_by_distance, extract_flowtimes
+from flowing import *
+from measurements import *
+from statana import *
 
 
 
@@ -108,7 +109,7 @@ for iprec, prec in enumerate(flow_precisions):
 
 
 # extract G(r) data series for each ln and each tau
-dr_vals = radial_multiplicities(ns)
+dr_vals = radial_multiplicities_r2(ns)
 corrs_config_prec_tau_r = [ [ [ make_distance_corr_arrays(corrs_r2, False, dr_vals)
                                 for corrs_r2 in finalmeas.q_corrs ]
                               for finalmeas in finalmeas_prec ]

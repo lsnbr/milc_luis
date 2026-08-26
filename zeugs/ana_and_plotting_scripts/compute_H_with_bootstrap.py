@@ -1,22 +1,6 @@
 from import_and_plotting_tech import *
-from dataclasses import dataclass
 import pickle
 
-
-
-
-
-@dataclass
-class ResultData:
-    
-    pmean  : dict[int, dict]                # mats  -->  fit parameter dict
-    rleft  : dict[tuple[int,int], float]    # (iflow, mats)  -->  r0
-    rright : dict[tuple[int,int], float]    # (iflow, mats)  -->  r1
-
-    tsums_mats : dict[tuple[int,int], float]                # (iflow, mats)  -->  H(n)
-    tsums_subs : dict[tuple[tuple[int,...],int], float]     # (sub, iflow)   -->  H_sub
-
-    psums_mats : dict[tuple[int,int], np.ndarray]       # (iflow, mats)  -->  partial sums of H(n)
 
 
 
@@ -70,7 +54,7 @@ def do_computation(bs : bool, printstuff : bool = False) -> ResultData:
 pickle_path = Path.cwd() / 'zeugs' / 'data' / 'bs_H.pkl'
 do_comp = False      # compute new bootstrap samples if True
 restart = False     # delete old bootstrap samples if True else append to them
-n_bs    = 850        # number of new bootstrap samples to compute if do_comp==True
+n_bs    = 5        # number of new bootstrap samples to compute if do_comp==True
 
 if (not do_comp) or (not restart and pickle_path.exists()):
     with open(pickle_path, 'rb') as f:
@@ -93,7 +77,7 @@ print('Number of bootstrap samples =', len(bs_data), end='\n\n\n')
 
 
 # compute fitting params and H's with errors from bootstrap ensemble? (or load data)
-do_comp = False
+do_comp = True
 pickle_path = Path.cwd() / 'zeugs' / 'data' / 'av_H.pkl'
 
 
