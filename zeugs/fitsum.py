@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from measurements import *
 from statana import *
-from ana_tail import *
+from fitsumtech import *
 
 
 
@@ -76,9 +76,6 @@ class FitSubSum:
 
         # some variables for sums
         self.tsums_sub = {}
-        self.psums_sub = {}
-        self.rleft_sub  = {}
-        self.rright_sub = {}
         
         self.tsums_sinh = {}
         self.psums_sinh = {}
@@ -88,6 +85,7 @@ class FitSubSum:
         self.psums_binsize = 0.25 if 'psums_binsize' not in kwargs else kwargs['psums_binsize']
         self.dist_psums    = bin_distances(ns, self.psums_binsize)
         
+
 
 
     def get_labels_mats(self, mats : int) -> dict[Any, str]:
@@ -127,36 +125,110 @@ class FitSubSum:
     def fitfcn_sub(self, sub : Iterable[int], ifl : int, x : np.ndarray) -> np.ndarray:
         return mats_subtraction(sub, [self.fitfcn_sinh(ifl, mats, x) for mats in sub])
     
-
-
-
-    def do_sums_for_sub(self, sub : Iterable[int]) -> tuple[list[float], list[np.ndarray]]:
-        '''...'''
-
-        iflows = self.get_common_iflows(sub)
-        for iflow in iflows:
-
-            ense_sub = mats_subtraction(sub, [build_integrand(self.dist, self.ense_all[:, iflow, mats, :], mats) for mats in sub])
-
-            rleft = max(self.fitstuff_mats[mats].rlims[iflow,mats][0] for mats in sub)
-            _, rright = find_rright_where_sn_worse_than_rleft(self.dist, ense_sub, (lambda x: gv.mean(self.fitfcn_sub(sub, iflow, np.array([x]))[0])), rleft, 0.2)
-            self.rleft_sub[sub, iflow]  = rleft
-            self.rright_sub[sub, iflow] = rright
-
-            # do sums
-            tsum, psums = sum_lin(ense_sub, (lambda x: gv.mean(self.fitfcn_sub(sub, iflow, x))), rleft, rright, self.psums_binsize)
-            self.tsums_sub[sub, iflow] = tsum
-            self.psums_sub[sub, iflow] = psums
-            print(f'total sum (sub{"".join(map(str, sub))}) = {tsum:.3f} T^4')
-
-        return [self.tsums_sub[sub, iflow] for iflow in iflows], [self.psums_sub[sub, iflow] for iflow in iflows]
     
 
 
 
 
+    ##################################################################
+    ###########################  fitting  ############################
+    ##################################################################
+
+
+    def do_fit_one_mat_diff_rmin(self, mats : int, rmin_dict : dict[int, float], ex_max : int, printfits : bool = False) -> FitStuff:
+        '''do fit for one mats, but use different rmin for each flowtime'''
+
+        labels = self.get_labels_mats(mats)
+
+        # preliminary fit with constant size bins
+        dist_fit0, data_fit0, _, _ = bin_cut_avg_data(
+            self.dist, self.ense_all,
+            {idx : self.cbins for idx in labels.keys()},
+            r_cuts0_left = {(ifl,mats) : rmin_dict[ifl] for ifl in self.iflows[mats]}
+        )
+        fit0 = fit_flowtime_and_mats_tails_with_prior(
+            dist_fit0, data_fit0,
+            excited_max=ex_max, mats=mats, corr=False
+        )
+        if printfits: print(fit0)
+
+        # actual fit with variable sized bins based on previous fit
+        vbins = bin_through_simultaneous_fit(
+            self.dist, self.ense_all, labels, fit0,
+            reltol=self.reltol, max_bin_size=self.max_bin_size
+        )
+        dist_fit, data_fit, ense_fit, rlims_fit = bin_cut_avg_data(
+            self.dist, self.ense_all, vbins,
+            r_cuts0_left = {(ifl,mats) : rmin_dict[ifl] for ifl in self.iflows[mats]}
+        )
+        fit = fit_flowtime_and_mats_tails_with_prior(
+            dist_fit, data_fit,
+            excited_max=ex_max, mats=mats
+        )
+        if printfits: print(fit)
+
+        self.fitstuff_mats[mats] = FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit)
+        return self.fitstuff_mats[mats]
+
+    
+
+
+
+    def do_fits_for_many_r_min_lefts(self, r_min_left_list : Iterable[float], iflows : Iterable[int], mats : int, mode : str, ex_max : int, printfit : bool = False) -> list[FitStuff]:
+        '''one fit for each r_min_left'''
+
+        fitstuff_list = []
+        labels = {(iflow, mats) : f'rf={flowtime_to_radius(flowtimes[iflow],nt)*nt:.2f}a, n={mats}' for iflow in iflows}
+
+        for r_min_left in r_min_left_list:
+            print(f'{r_min_left = :.2f}')
+
+            if mode == 'const':
+                dist_fit, data_fit, ense_fit, rlims_fit = bin_cut_avg_data(
+                    self.dist, self.ense_all,
+                    {(iflow, mats) : self.cbins for iflow in iflows},
+                    r_min_left=r_min_left, r_max_right=30
+                )
+
+            if mode == 'var':
+                dist_fit0, data_fit0, _, _ = bin_cut_avg_data(
+                    self.dist, self.ense_all,
+                    {(iflow, mats) : self.cbins for iflow in iflows},
+                    r_min_left=r_min_left, r_max_right=None
+                )
+                fit0 = fit_flowtime_and_mats_tails_with_prior(
+                    dist_fit0, data_fit0,
+                    excited_max=ex_max, mats=mats, corr=False
+                )
+                vbins = bin_through_simultaneous_fit(
+                    self.dist, self.ense_all, labels, fit0,
+                    reltol=self.reltol, max_bin_size=self.max_bin_size
+                )
+                dist_fit, data_fit, ense_fit, rlims_fit = bin_cut_avg_data(
+                    self.dist, self.ense_all, vbins,
+                    r_min_left=r_min_left, r_max_right=None
+                )
+
+            fit = fit_flowtime_and_mats_tails_with_prior(
+                dist_fit, data_fit,
+                excited_max=ex_max, mats=mats
+            )
+            fitstuff_list.append(FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit))
+            if printfit: print(fit)
+            
+        return fitstuff_list
+    
+
+
+
+
+    ##################################################################
+    ###########################  summing  ############################
+    ##################################################################
+
+
     def do_sums_for_sub_from_mats(self, sub : Iterable[int], printsums : bool = True) -> dict[int, float]:
-        '''use sum ove mats sinh for sub sums'''
+        '''use sum over mats sinh for sub sums'''
 
         res = {}
 
@@ -199,211 +271,11 @@ class FitSubSum:
 
 
 
-    def do_fit_one_mat_diff_rmin(self, mats : int, rmin_dict : dict[int, float], ex_max : int, printfits : bool = False) -> FitStuff:
-        '''do fit for one mats, but use different rmin for each flowtime'''
-
-        labels = self.get_labels_mats(mats)
-
-        # preliminary fit with constant size bins
-        dist_fit0, data_fit0, _, _ = bin_cut_avg_data(
-            self.dist, self.ense_all,
-            {idx : self.cbins for idx in labels.keys()},
-            r_cuts0_left = {(ifl,mats) : rmin_dict[ifl] for ifl in self.iflows[mats]}
-        )
-        fit0 = fit_flowtime_and_mats_tails_with_prior(
-            dist_fit0, data_fit0,
-            excited_max=ex_max, mats_list=[mats], corr=False
-        )
-        if printfits: print(fit0)
-
-        # actual fit with variable sized bins based on previous fit
-        vbins = bin_through_simultaneous_fit(
-            self.dist, self.ense_all, labels, fit0,
-            reltol=self.reltol, max_bin_size=self.max_bin_size
-        )
-        dist_fit, data_fit, ense_fit, rlims_fit = bin_cut_avg_data(
-            self.dist, self.ense_all, vbins,
-            r_cuts0_left = {(ifl,mats) : rmin_dict[ifl] for ifl in self.iflows[mats]}
-        )
-        fit = fit_flowtime_and_mats_tails_with_prior(
-            dist_fit, data_fit,
-            excited_max=ex_max, mats_list=[mats]
-        )
-        if printfits: print(fit)
-
-        self.fitstuff_mats[mats] = FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit)
-        return self.fitstuff_mats[mats]
-
-
-
-
-
-
-    def do_fits_for_all_mats_onlygs(self, mode : str, axes : np.ndarray|None = None) -> dict[int, FitStuff]:
-        '''For each mats: do fit with only gs for various r_min_left, then choose the first one where Q >= fac * Q_max.'''
-
-        fac = 0.75
-
-        fitstuff_list_mats = self.do_fits_for_many_r_min_lefts_for_all_mats(mode, 0, axes)
-
-        for mats, fitstuff_list in enumerate(fitstuff_list_mats):
-            Q_max = max(fitstuff.fit.Q for fitstuff in fitstuff_list)
-
-            for fitstuff in fitstuff_list:
-                if fitstuff.fit.Q >= fac * Q_max:
-                    self.fitstuff_mats[mats] = fitstuff
-                    break
-
-        return self.fitstuff_mats
-    
-
-
-
-    def do_fits_for_all_mats_manym(self, ex_max : int, r_min_left : float|list[float], printfits : bool = False) -> dict[int, FitStuff]:
-        '''For each mats: do fit with multiple excited states and fixed r_min_left.'''
-
-        for mats in (0,1,2):
-            print(f'fitting mats={mats}...')
-
-            labels = {}
-            for iflow in self.iflows:
-                rf = flowtime_to_radius(flowtimes[iflow], nt) * nt
-                labels[iflow, mats] = f'rf={rf:.2f}a, n={mats}'
-
-            # preliminary fit with constant size bins
-            dist_fit0, data_fit0, _, _ = bin_cut_avg_data(
-                self.dist, self.ense_all,
-                {idx : self.cbins for idx in labels.keys()},
-                r_min_left = r_min_left if isinstance(r_min_left, float) else r_min_left[mats]
-            )
-            fit0 = fit_flowtime_and_mats_tails_with_prior(
-                dist_fit0, data_fit0,
-                excited_max=ex_max, mats_list=[mats], corr=False
-            )
-            if printfits: print(fit0)
-
-            # actual fit with variable sized bins based on previous fit
-            vbins = bin_through_simultaneous_fit(
-                self.dist, self.ense_all, labels, fit0,
-                reltol=self.reltol, max_bin_size=self.max_bin_size
-            )
-            dist_fit, data_fit, ense_fit, rlims_fit = bin_cut_avg_data(
-                self.dist, self.ense_all, vbins,
-                r_min_left = r_min_left if isinstance(r_min_left, float) else r_min_left[mats]
-            )
-            fit = fit_flowtime_and_mats_tails_with_prior(
-                dist_fit, data_fit,
-                excited_max=ex_max, mats_list=[mats]
-            )
-            if printfits: print(fit)
-
-            self.fitstuff_mats[mats] = FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit)
-
-        return self.fitstuff_mats
-    
-
-
-
-    def do_fits_for_all_mats_manym_cbins(self, ex_max : int, r_min_left : float|list[float], printfits : bool = False) -> dict[int, FitStuff]:
-        '''For each mats: do fit with multiple excited states and fixed r_min_left (constant size bins).'''
-
-        for mats in (0,1,2):
-            print(f'fitting mats={mats}...')
-
-            labels = {}
-            for iflow in self.iflows:
-                rf = flowtime_to_radius(flowtimes[iflow], nt) * nt
-                labels[iflow, mats] = f'rf={rf:.2f}a, n={mats}'
-
-            # preliminary fit with constant size bins
-            dist_fit, data_fit, ense_fit, rlims_fit = bin_cut_avg_data(
-                self.dist, self.ense_all,
-                {idx : self.cbins for idx in labels.keys()},
-                r_min_left  = r_min_left if isinstance(r_min_left, float) else r_min_left[mats],
-                r_max_right = 30
-            )
-            fit = fit_flowtime_and_mats_tails_with_prior(
-                dist_fit, data_fit,
-                excited_max=ex_max, mats_list=[mats]
-            )
-            if printfits: print(fit)
-
-            self.fitstuff_mats[mats] = FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit)
-
-        return self.fitstuff_mats
-
-
-
-
-
-    def do_fits_for_many_r_min_lefts_for_all_mats(self, mode : str, ex_max : int, axes : np.ndarray|None = None) -> list[list[FitStuff]]:
-        '''Peform fit for each matsubara mode using only the lowest mass.'''
-
-        fitstuff_list_mats = []
-        for mats in (0, 1, 2):
-            r_min_left_list = self.r_min_left_list_mats[mats]
-
-            fitstuff_list = self.do_fits_for_many_r_min_lefts(r_min_left_list, self.iflows, mats, mode, ex_max)
-            fitstuff_list_mats.append(fitstuff_list)
-            print(', '.join(str(fitstuff.fit.p[f'm_0_{mats}']) for fitstuff in fitstuff_list))
-
-            if axes is not None:
-                plot_fitp_and_Q(r_min_left_list, fitstuff_list, [('m' if ex==0 else 'dm') + f'_{ex}_{mats}' for ex in range(ex_max+1)], axes[mats])
-
-        return fitstuff_list_mats
-    
-
-
-
-    def do_fits_for_many_r_min_lefts(self, r_min_left_list : Iterable[float], iflows : Iterable[int], mats : int, mode : str, ex_max : int, printfit : bool = False) -> list[FitStuff]:
-        '''one fit for each r_min_left'''
-
-        fitstuff_list = []
-        labels = {(iflow, mats) : f'rf={flowtime_to_radius(flowtimes[iflow],nt)*nt:.2f}a, n={mats}' for iflow in iflows}
-
-        for r_min_left in r_min_left_list:
-            print(f'{r_min_left = :.2f}')
-
-            if mode == 'const':
-                dist_fit, data_fit, ense_fit, rlims_fit = bin_cut_avg_data(
-                    self.dist, self.ense_all,
-                    {(iflow, mats) : self.cbins for iflow in iflows},
-                    r_min_left=r_min_left, r_max_right=30
-                )
-
-            if mode == 'var':
-                dist_fit0, data_fit0, _, _ = bin_cut_avg_data(
-                    self.dist, self.ense_all,
-                    {(iflow, mats) : self.cbins for iflow in iflows},
-                    r_min_left=r_min_left, r_max_right=None
-                )
-                fit0 = fit_flowtime_and_mats_tails_with_prior(
-                    dist_fit0, data_fit0,
-                    excited_max=ex_max, mats_list=[mats], corr=False
-                )
-                vbins = bin_through_simultaneous_fit(
-                    self.dist, self.ense_all, labels, fit0,
-                    reltol=self.reltol, max_bin_size=self.max_bin_size
-                )
-                dist_fit, data_fit, ense_fit, rlims_fit = bin_cut_avg_data(
-                    self.dist, self.ense_all, vbins,
-                    r_min_left=r_min_left, r_max_right=None
-                )
-
-            fit = fit_flowtime_and_mats_tails_with_prior(
-                dist_fit, data_fit,
-                excited_max=ex_max, mats_list=[mats]
-            )
-            fitstuff_list.append(FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit))
-            if printfit: print(fit)
-            
-        return fitstuff_list
-
-
 
     ##################################################################
-    ###########################  plotting  ###########################
+    #######################  plot final fits  ########################
     ##################################################################
+
 
     def plot_mats_fits(self, axes : np.ndarray|None = None, path : Path|None = None) -> None:
         '''plots fit to matsubara modes'''
@@ -478,27 +350,10 @@ class FitSubSum:
 
 
 
-    def plot_iflow_comparison_of_rleft_fits(self, ex_max : int, axes : np.ndarray|None = None, path : Path|None = None) -> None:
-        '''...'''
 
-        if path is not None:
-            nrows, ncols = len(self.iflows), 1
-            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
-
-        cmap = plt.colormaps['plasma']
-        colors = cmap(np.linspace(0, 1, len(self.iflows)))
-
-        for mats in (0, 1, 2):
-            r_min_left_list = self.r_min_left_list_mats[mats]
-
-            for iflow, color in zip(self.iflows, colors):
-                fitstuff_list = self.do_fits_for_many_r_min_lefts(r_min_left_list, [iflow], mats, 'var', ex_max)
-                plot_fitp_and_Q(r_min_left_list, fitstuff_list, [f'm_0_{mats}'], axes[mats], labelx=f'{iflow}', color=color)
-
-        if path is not None:
-            fig.tight_layout()
-            fig.savefig(path, dpi=400)
-
+    ##################################################################
+    #########################  other plots  ##########################
+    ##################################################################
 
 
     def plot_iflow_comparison_of_rleft_fits_single_mats(self, mats : int, ex_max : int, axes : np.ndarray|None = None, path : Path|None = None) -> list[list[FitStuff]]:
@@ -524,61 +379,6 @@ class FitSubSum:
 
         return res
     
-
-
-    def plot_subtraction_fits(self, sub : Iterable[int], axes : np.ndarray|None = None, path : Path|None = None, **kwargs) -> None:
-        '''plots subtracted data together with fit'''
-
-        if path is not None:
-            nrows, ncols = len(self.get_common_iflows(sub)), 1
-            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
-
-        cbin_size = kwargs['cbin_size'] if 'cbin_size' in kwargs else 0.25
-        cbins     = find_distance_bins(self.dist, cbin_size)
-        dist_b,   = bin_averages(cbins, self.dist)
-
-        for iiflow, iflow in enumerate(self.get_common_iflows(sub)):
-
-            rleft = max(self.fitstuff_mats[mats].rlims[iflow,mats][0] for mats in sub)
-            ileft = index_from_distance(dist_b, rleft)
-
-            # prepare data
-            ense_sub    = mats_subtraction(sub, [build_integrand(self.dist, self.ense_all[:, iflow, mats, :], mats) for mats in sub])
-            ense_sub_b, = bin_averages(cbins, ense_sub)
-            data_sub_b  = gv.dataset.avg_data(ense_sub_b)
-
-            # plot subtractions plus fit
-            plot_dist(dist_b, data_sub_b, axes[iiflow], label=''.join(map(str,sub))+'sub')
-            plot_fitfcn(dist_b[ileft:], self.fitfcn_sub(sub, iflow, dist_b[ileft:]), axes[iiflow])
-            xlim = kwargs['xlim'] if 'xlim' in kwargs else {(0,1) : (3,14),    (0,1,2) : (3,14)   }[sub]
-            ylim = kwargs['ylim'] if 'ylim' in kwargs else {(0,1) : (-0.5, 1), (0,1,2) : (-1.5, 3)}[sub]
-            axes[iiflow].set_xlim(*xlim)
-            axes[iiflow].set_ylim(*ylim)
-
-        if path is not None:
-            fig.tight_layout()
-            fig.savefig(path, dpi=400)
-
-
-
-    def plot_partial_sums(self, sub : Iterable[int], axes : np.ndarray|None = None, path : Path|None = None) -> None:
-        '''plot partial sums corresponding to sub'''
-
-        if path is not None:
-            nrows, ncols = len(self.iflows), 1
-            fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
-
-        for iiflow, iflow in enumerate(self.iflows):
-
-            plot_dist(self.dist_psums, self.psums_sub[sub, iflow], axes[iiflow], markersize=4, linestyle='--')
-            axes[iiflow].set_ylabel(f'partial sums (sub{"".join(map(str, sub))})' + r'$ / T^4$')
-            axes[iiflow].axvline(x=self.rleft_sub[sub, iflow],  color='black', alpha=0.5)
-            axes[iiflow].axvline(x=self.rright_sub[sub, iflow], color='black', alpha=0.5)
-            axes[iiflow].set_xlim(0, 25)
-
-        if path is not None:
-            fig.tight_layout()
-            fig.savefig(path, dpi=400)
 
 
 
@@ -661,71 +461,13 @@ def plot_fitp_and_Q(r_list : Iterable[float], fitstuff_list : Iterable[FitStuff]
 
 
 
-    
 
 
 
 
-
-def find_rright_where_sn_worse_than_rleft(dist : np.ndarray, ense : np.ndarray, fcn : Callable[[float], float], rleft : float, fac : float) -> tuple[int, float]:
-    '''Find r, such that sn(r) <= fac * sn(rleft).
-    Uses s/n where signal is from fcn and noise is from ense.'''
-
-    ileft    = index_from_distance(dist, rleft)
-    ense_sem = ense.std(axis=0, ddof=1) / np.sqrt(ense.shape[0])
-    sn_left  = abs(fcn(dist[ileft]) / ense_sem[ileft])
-
-    for iright in range(ileft+1, len(dist)):
-        sn_right = abs(fcn(dist[iright]) / ense_sem[iright])
-        if sn_right <= fac * sn_left:
-            break
-
-    return iright, dist[iright]
-
-
-
-
-
-def fit_flowtime_and_mats_tails_with_prior(dist : dict[Any, np.ndarray], data : dict[Any, np.ndarray], excited_max : int, mats_list : list[int], p0 : dict|None = None, corr : bool = True) -> lsqfit.nonlinear_fit:
-    '''fit with priors'''
-
-    iflows = sorted(iflow for iflow,_ in data.keys())
-
-    if 0: prior = make_prior_many_mats(excited_max, mats_list, iflows)
-    if 1: prior = make_prior_uniform_many_mats(excited_max, mats_list, iflows)
-
-    if p0 is None:
-        p0 = make_p0_many_mats(excited_max, mats_list, iflows)
-
-    def fitfcn(x, p):
-        y = {}
-        for idx in x.keys():
-            iflow, mats = idx
-            y[idx] = expx_single_mats(x[idx], p, iflow, mats, excited_max)
-        return y
-    
-    return (
-        lsqfit.nonlinear_fit( data =(dist, data), fcn=fitfcn, prior=prior, p0=p0, debug=True )
-        if corr else
-        lsqfit.nonlinear_fit( udata=(dist, data), fcn=fitfcn, prior=prior, p0=p0, debug=True )
-    )
-
-
-
-
-
-def plot_dist_many(dist : np.ndarray, datas : list[np.ndarray], il : int, ir : int, labels : list[str], axes : plt.Axes) -> None:
-    '''plot, including data up to signa; to noise sn_max'''
-
-    for data, label in zip(datas, labels):
-        plot_dist(
-            dist = dist[il:ir],
-            data = data[il:ir],
-            axes = axes,
-            label = label
-        )
-
-
+##################################################################
+########  general integrand and subtraction constructions  #######
+##################################################################
 
 
 def build_integrand(dist : np.ndarray, data : np.ndarray, mats : int) -> np.ndarray:
@@ -749,7 +491,6 @@ def build_integrand(dist : np.ndarray, data : np.ndarray, mats : int) -> np.ndar
 
 
 
-
 def mats_subtraction(sub : tuple[int], datas : Iterable[np.ndarray]) -> np.ndarray:
     '''do subtraction depending on sub'''
 
@@ -757,13 +498,6 @@ def mats_subtraction(sub : tuple[int], datas : Iterable[np.ndarray]) -> np.ndarr
     if sub == (0,1,2): return datas[0] + (-4/3) * datas[1] + (1/3) * datas[2]
 
     raise Exception(f'Subtraction for {sub=} is not implemented.')
-
-
-
-
-
-
-
 
 
 

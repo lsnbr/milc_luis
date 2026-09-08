@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 import numpy as np
 import gvar as gv
 import lsqfit
@@ -73,18 +73,20 @@ def index_max_error(data : np.ndarray, err_max : float) -> int:
 
 
 
-def expx_fcn(x : float, a_vals : list[float], m_vals : list[float]) -> float:
-    '''Sum of len(a_vals) = len(m_vals) exponentials.'''
+def find_rright_where_sn_worse_than_rleft(dist : np.ndarray, ense : np.ndarray, fcn : Callable[[float], float], rleft : float, fac : float) -> tuple[int, float]:
+    '''Find r, such that sn(r) <= fac * sn(rleft).
+    Uses s/n where signal is from fcn and noise is from ense.'''
 
-    return sum( a * np.exp(- m * x) / x
-                for a, m in zip(a_vals, m_vals, strict=True) )
+    ileft    = index_from_distance(dist, rleft)
+    ense_sem = ense.std(axis=0, ddof=1) / np.sqrt(ense.shape[0])
+    sn_left  = abs(fcn(dist[ileft]) / ense_sem[ileft])
 
+    for iright in range(ileft+1, len(dist)):
+        sn_right = abs(fcn(dist[iright]) / ense_sem[iright])
+        if sn_right <= fac * sn_left:
+            break
 
-
-def expx(x : float, a : float, m : float) -> float:
-    '''Simple a exp(-m x) / x'''
-
-    return a * gv.exp(- m * x) / x
+    return iright, dist[iright]
 
 
 
@@ -246,7 +248,7 @@ def bin_cut_avg_data(
     ) -> tuple[dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, np.ndarray], dict[Any, tuple[float, float]]]:
     '''
     What it does:
-        1. Bins each series according to its bins
+        1. Bins each series according to its bins (series are nd-indexes from bins.keys())
         2. Determines left and right limits of distances to be included in final data
         3. Averages data over all samples, computing all correlations
 
@@ -408,35 +410,6 @@ class GVarAxesAdapter:
             return getattr(self._ax, f'set_{name}')
         return getattr(self._ax, name)
     
-
-
-
-def plot_distance_correlations(corrs : np.ndarray, dist : np.ndarray, rmin : float, rmax : float, axes : plt.Axes) -> None:
-    '''...'''
-
-    il = index_from_distance(dist, rmin)
-    ir = index_from_distance(dist, rmax)
-
-    data = corrs[il:ir, il:ir]
-    n_r = data.shape[0]
-
-    axes.imshow(data, cmap='coolwarm', vmin=0, vmax=1)
-
-    n_ticks = 6
-    ticks = np.linspace(0, n_r - 1, n_ticks)
-    axes.set_xticks(ticks)
-    axes.set_yticks(ticks)
-
-    labels = np.linspace(rmin, rmax, n_ticks)
-    axes.set_xticklabels([f'{x:.0f}' for x in labels])
-    axes.set_yticklabels([f'{x:.0f}' for x in labels])
-
-    axes.set_xlabel('r / a')
-    axes.set_ylabel('r / a')
-    axes.set_title('radius correlations')
-
-
-
 
 
 

@@ -5,8 +5,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from measurements import *
 from statana import *
-from ana_tail import *
-from ana_mats import FitSubSum, build_integrand
+from fitsumtech import *
+from fitsum import FitSubSum, build_integrand
 
 import matplotlib
 matplotlib.use("Agg")

@@ -45,42 +45,6 @@ m_mats = lambda m, mats: np.sqrt( m**2 + p_mats(mats)**2 )
 
 
 
-def make_prior_mats_constr(mats : int, excited_max : int, iflowtimes : list[int]) -> gv.BufferDict:
-    '''constructs prior for single matsubara modes (constraining masses). todo: add e0 < e1 < ... constraint on excited energies'''
-
-    if excited_max > 2:
-        raise Exception('Not yet implemented for excited_max > 2.')
-    
-    # add distribution to reparametrize masses to enforce constraint on higher matsubara mode masses
-    if not gv.BufferDict.has_distribution(f'f_p{mats}'):
-        gv.BufferDict.add_distribution(
-            f'f_p{mats}',
-            lambda x: p_mats(mats) + gv.exp(x)
-        )
-
-    # gv.BufferDict instead of python dict for custom distribution support
-    prior = gv.BufferDict()
-
-    # prior for lowest mass
-    m_guess = m_mats(masses_0p[0], mats)
-    prior[f'f_p{mats}(m_0_{mats})'] = gv.log(gv.gvar(m_guess, m_guess*1) - p_mats(mats))
-
-    # priors for higher masses
-    for n_ex in range(1, excited_max+1):
-        dm_guess = m_mats(masses_0p[n_ex], mats) - m_mats(masses_0p[n_ex-1], mats)
-        prior[f'log(dm_{n_ex}_{mats})'] = gv.log(gv.gvar(dm_guess, dm_guess*1))
-        # prior[f'u(dm_{n_ex}_{mats})'] = gv.BufferDict.uniform('u', 0, 5)
-
-    # priors for all the amplitudes
-    for n_ex in range(excited_max+1):
-        for ift in iflowtimes:
-            prior[f'log(a_{ift}_{n_ex}_{mats})'] = gv.log(gv.gvar(1, 50))
-
-    return prior
-
-
-
-
 def make_prior_mats_uniform(mats : int, ex_max : int, iflows : list[int]) -> gv.BufferDict:
     '''Construct prior for single Matsubara mode using only uniform distributions.'''
 
@@ -98,44 +62,6 @@ def make_prior_mats_uniform(mats : int, ex_max : int, iflows : list[int]) -> gv.
 
     return prior
 
-
-
-
-def make_prior_uniform_many_mats(excited_max : int, mats_list : list[int], iflowtimes : list[int]) -> gv.BufferDict:
-    '''...'''
-
-    prior = gv.BufferDict()
-
-    for mats in mats_list:
-        prior.update(make_prior_mats_uniform(mats, excited_max, iflowtimes))
-
-    return prior
-
-
-
-
-def make_prior_many_mats(excited_max : int, mats_list : list[int], iflowtimes : list[int]) -> gv.BufferDict:
-    '''...'''
-
-    prior = gv.BufferDict()
-
-    for mats in mats_list:
-        prior.update(make_prior_mats_constr(mats, excited_max, iflowtimes))
-
-    return prior
-
-
-
-
-def make_prior_constr(excited_max : int, mats_max : int, iflowtimes : list[int]) -> gv.BufferDict:
-    '''construct prior, incorporating constraints on masses'''
-
-    prior = gv.BufferDict()
-
-    for mats in range(mats_max+1):
-        prior.update(make_prior_mats_constr(mats, excited_max, iflowtimes))
-
-    return prior
 
 
 
@@ -158,13 +84,17 @@ def make_p0_mats(ex_max : int, mats : int, iflows : list[int]) -> dict[Any, floa
 
 
 
-def make_p0_many_mats(ex_max : int, mats_list : list[int], iflows : list[int]) -> dict[Any, float]:
-    '''Construct starting guesses for multiple matsubara modes.'''
 
-    p0 = {}
-    for mats in mats_list:
-        p0.update(make_p0_mats(ex_max, mats, iflows))
-    return p0
+
+###############################################################################
+############################  actual fitting  #################################
+###############################################################################
+
+
+def expx(x : float, a : float, m : float) -> float:
+    '''x  -->  a exp(-m x) / x'''
+
+    return a * gv.exp(- m * x) / x
 
 
 
@@ -188,6 +118,31 @@ def expx_single_mats(x : float, p : dict, iflow : int, mats : int, ex_max : int)
     )
 
 
+
+
+
+def fit_flowtime_and_mats_tails_with_prior(dist : dict[Any, np.ndarray], data : dict[Any, np.ndarray], excited_max : int, mats : int, p0 : dict|None = None, corr : bool = True) -> lsqfit.nonlinear_fit:
+    '''fit with priors'''
+
+    iflows = sorted(iflow for iflow,_ in data.keys())
+
+    prior = make_prior_mats_uniform(mats, excited_max, iflows)
+
+    if p0 is None:
+        p0 = make_p0_mats(excited_max, mats, iflows)
+
+    def fitfcn(x, p):
+        y = {}
+        for idx in x.keys():
+            iflow_k, mats_k = idx
+            y[idx] = expx_single_mats(x[idx], p, iflow_k, mats_k, excited_max)
+        return y
+    
+    return (
+        lsqfit.nonlinear_fit( data =(dist, data), fcn=fitfcn, prior=prior, p0=p0 )
+        if corr else
+        lsqfit.nonlinear_fit( udata=(dist, data), fcn=fitfcn, prior=prior, p0=p0 )
+    )
 
 
 
@@ -290,13 +245,3 @@ def sum_lin(ense : np.ndarray, fcn : Callable, r_left : float, r_right : float, 
 
     
 
-
-
-
-
-
-
-
-if __name__ == '__main__':
-
-    ...,...,...
