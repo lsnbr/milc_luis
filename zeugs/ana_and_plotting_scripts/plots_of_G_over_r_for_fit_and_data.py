@@ -20,7 +20,7 @@ if 1:
     ex_max = 0
     iflows_for_mats = [(11,18), (11,18), (11,14)]
     xlim_mats = [(8,30), (6,20), (5,15)]
-    ylim_iifl_mats = [[(-0.014,0.002),(-0.0055,0.0005)], [(-0.0325, 0.005),(-0.0085,0.001)], [(-0.0325,0.005),(-0.025,0.0025)]]
+    ylim_iifl_mats = [[(-0.012,0.002),(-0.005,0.0005)], [(-0.0325, 0.005),(-0.0085,0.001)], [(-0.038,0.005),(-0.041,0.0025)]]
 
 # ex1 (ex_max=1) fit
 if 0:
@@ -62,10 +62,12 @@ for mats in (0,1,2):
         # ax.tick_params(axis="y", direction="in", pad=-18-11, right=True, labelright=False)
 
         ax.legend(loc='lower right')
-        ax.set_title(f'$n={mats}$, $t={flowtimes[ifl]:.2f}a^2$')
+        ax.set_title(f'$n={mats}$, $t_\\mathrm{{f}}={flowtimes[ifl]:.2f}a^2$')
 
 
 
 
 fig.tight_layout(w_pad=0.5)
-fig.savefig(Path.cwd() / 'zeugs' / 'plots' / f'fit_data_plot_ex{ex_max}.pdf', dpi=400)
+plotpath = Path.cwd() / 'zeugs' / 'plots' / f'fit_data_plot_ex{ex_max}.pdf'
+fig.savefig(plotpath, dpi=400)
+print('saved at:', plotpath)

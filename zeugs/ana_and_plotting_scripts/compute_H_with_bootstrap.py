@@ -54,7 +54,7 @@ def do_computation(bs : bool, printstuff : bool = False) -> ResultData:
 pickle_path = Path.cwd() / 'zeugs' / 'data' / 'bs_H.pkl'
 do_comp = False      # compute new bootstrap samples if True
 restart = False     # delete old bootstrap samples if True else append to them
-n_bs    = 5        # number of new bootstrap samples to compute if do_comp==True
+n_bs    = 900        # number of new bootstrap samples to compute if do_comp==True
 
 if (not do_comp) or (not restart and pickle_path.exists()):
     with open(pickle_path, 'rb') as f:

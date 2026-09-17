@@ -141,14 +141,15 @@ class FitSubSum:
         labels = self.get_labels_mats(mats)
 
         # preliminary fit with constant size bins
-        dist_fit0, data_fit0, _, _ = bin_cut_avg_data(
+        dist_fit0, data_fit0, _, rlims_fit0 = bin_cut_avg_data(
             self.dist, self.ense_all,
             {idx : self.cbins for idx in labels.keys()},
             r_cuts0_left = {(ifl,mats) : rmin_dict[ifl] for ifl in self.iflows[mats]}
         )
+        x_pivots0 = compute_x_pivots_naive(rlims_fit0)
         fit0 = fit_flowtime_and_mats_tails_with_prior(
             dist_fit0, data_fit0,
-            excited_max=ex_max, mats=mats, corr=False
+            excited_max=ex_max, mats=mats, corr=False, x_pivots=x_pivots0
         )
         if printfits: print(fit0)
 
@@ -161,9 +162,10 @@ class FitSubSum:
             self.dist, self.ense_all, vbins,
             r_cuts0_left = {(ifl,mats) : rmin_dict[ifl] for ifl in self.iflows[mats]}
         )
+        x_pivots = compute_x_pivots_naive(rlims_fit)
         fit = fit_flowtime_and_mats_tails_with_prior(
             dist_fit, data_fit,
-            excited_max=ex_max, mats=mats
+            excited_max=ex_max, mats=mats, x_pivots=x_pivots
         )
         if printfits: print(fit)
 
@@ -191,14 +193,15 @@ class FitSubSum:
                 )
 
             if mode == 'var':
-                dist_fit0, data_fit0, _, _ = bin_cut_avg_data(
+                dist_fit0, data_fit0, _, rlims_fit0 = bin_cut_avg_data(
                     self.dist, self.ense_all,
                     {(iflow, mats) : self.cbins for iflow in iflows},
                     r_min_left=r_min_left, r_max_right=None
                 )
+                x_pivots0 = compute_x_pivots_naive(rlims_fit0)
                 fit0 = fit_flowtime_and_mats_tails_with_prior(
                     dist_fit0, data_fit0,
-                    excited_max=ex_max, mats=mats, corr=False
+                    excited_max=ex_max, mats=mats, corr=False, x_pivots=x_pivots0
                 )
                 vbins = bin_through_simultaneous_fit(
                     self.dist, self.ense_all, labels, fit0,
@@ -209,9 +212,10 @@ class FitSubSum:
                     r_min_left=r_min_left, r_max_right=None
                 )
 
+            x_pivots = compute_x_pivots_naive(rlims_fit)
             fit = fit_flowtime_and_mats_tails_with_prior(
                 dist_fit, data_fit,
-                excited_max=ex_max, mats=mats
+                excited_max=ex_max, mats=mats, x_pivots=x_pivots
             )
             fitstuff_list.append(FitStuff(labels, dist_fit, data_fit, ense_fit, rlims_fit, fit))
             if printfit: print(fit)
@@ -356,18 +360,19 @@ class FitSubSum:
     ##################################################################
 
 
-    def plot_iflow_comparison_of_rleft_fits_single_mats(self, mats : int, ex_max : int, axes : np.ndarray|None = None, path : Path|None = None) -> list[list[FitStuff]]:
+    def plot_iflow_comparison_of_rleft_fits_single_mats(self, mats : int, ex_max : int, iflows : Iterable[int],
+                                                        axes : np.ndarray|None = None, path : Path|None = None) -> list[list[FitStuff]]:
         '''returns: fitstuff2dlist[iiflow][irmin]'''
 
         if path is not None:
-            nrows, ncols = len(self.iflows), 1
+            nrows, ncols = len(iflows), 1
             fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(7*ncols, 4*nrows))
 
         res = []
 
         r_min_left_list = self.r_min_left_list_mats[mats]
 
-        for iiflow, iflow in enumerate(self.iflows):
+        for iiflow, iflow in enumerate(iflows):
             fitstuff_list = self.do_fits_for_many_r_min_lefts(r_min_left_list, [iflow], mats, 'var', ex_max)
             pnames = [f'm_0_{mats}'] + [f'dm_{ex}_{mats}' for ex in range(1, ex_max+1)]
             plot_fitp_and_Q(r_min_left_list, fitstuff_list, pnames, axes[iiflow], labelx=f'{iflow}, {flowtimes[iflow]:.2f}')
@@ -385,10 +390,9 @@ class FitSubSum:
     def plot_effective_mass_curves(self, iflows : int|list[int]|None = None, mats : int|list[int]|None = None, axes : np.ndarray|None = None, path : Path|None = None) -> None:
         '''plots effective mass curves'''
 
-        if iflows is None:            iflows = self.iflows
-        elif isinstance(iflows, int): iflows = [iflows]
-        if mats is None:              mats = [0,1,2]
-        elif isinstance(mats, int):   mats = [mats]
+        if isinstance(iflows, int): iflows = [iflows]
+        if mats is None:            mats = [0,1,2]
+        elif isinstance(mats, int): mats = [mats]
 
         if path is not None:
             nrows, ncols = len(iflows), len(mats)

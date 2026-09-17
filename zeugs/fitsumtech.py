@@ -91,16 +91,16 @@ def make_p0_mats(ex_max : int, mats : int, iflows : list[int]) -> dict[Any, floa
 ###############################################################################
 
 
-def expx(x : float, a : float, m : float) -> float:
-    '''x  -->  a exp(-m x) / x'''
+def expx(x : float, a : float, m : float, x_pivot : float = 0) -> float:
+    '''x  -->  a exp(-m (x - x_pivot)) / x'''
 
-    return a * gv.exp(- m * x) / x
-
-
+    return a * gv.exp(- m * (x - x_pivot)) / x
 
 
 
-def expx_single_mats(x : float, p : dict, iflow : int, mats : int, ex_max : int) -> float:
+
+
+def expx_single_mats(x : float, p : dict, iflow : int, mats : int, ex_max : int, x_pivot : float = 0) -> float:
     '''fit function for a single matsubara mode and possibly multiple excited states'''
 
     masses = [p[f'm_0_{mats}']]
@@ -110,9 +110,9 @@ def expx_single_mats(x : float, p : dict, iflow : int, mats : int, ex_max : int)
     return sum(
         expx(
             x / nt,
-            # - (nt/ns)**2 * masses[n_ex] * p[f'a_{iflow}_{n_ex}_{mats}'],
-            - masses[n_ex] * p[f'a_{iflow}_{n_ex}_{mats}'],
-            masses[n_ex]
+            - p[f'a_{iflow}_{n_ex}_{mats}'],
+            masses[n_ex],
+            x_pivot = x_pivot / nt
         )
         for n_ex in range(ex_max + 1)
     )
@@ -121,7 +121,8 @@ def expx_single_mats(x : float, p : dict, iflow : int, mats : int, ex_max : int)
 
 
 
-def fit_flowtime_and_mats_tails_with_prior(dist : dict[Any, np.ndarray], data : dict[Any, np.ndarray], excited_max : int, mats : int, p0 : dict|None = None, corr : bool = True) -> lsqfit.nonlinear_fit:
+def fit_flowtime_and_mats_tails_with_prior(dist : dict[Any, np.ndarray], data : dict[Any, np.ndarray],
+    excited_max : int, mats : int, p0 : dict|None = None, corr : bool = True, x_pivots : dict[Any, float]|None = None) -> lsqfit.nonlinear_fit:
     '''fit with priors'''
 
     iflows = sorted(iflow for iflow,_ in data.keys())
@@ -135,7 +136,7 @@ def fit_flowtime_and_mats_tails_with_prior(dist : dict[Any, np.ndarray], data : 
         y = {}
         for idx in x.keys():
             iflow_k, mats_k = idx
-            y[idx] = expx_single_mats(x[idx], p, iflow_k, mats_k, excited_max)
+            y[idx] = expx_single_mats(x[idx], p, iflow_k, mats_k, excited_max, x_pivot=(0 if x_pivots is None else x_pivots[idx]))
         return y
     
     return (
@@ -143,6 +144,23 @@ def fit_flowtime_and_mats_tails_with_prior(dist : dict[Any, np.ndarray], data : 
         if corr else
         lsqfit.nonlinear_fit( udata=(dist, data), fcn=fitfcn, prior=prior, p0=p0 )
     )
+
+
+
+
+
+###############################################################################
+################################  pivots  #####################################
+###############################################################################
+
+
+def compute_x_pivots_naive(r_lims : dict[Any, tuple[float,float]]) -> dict[Any, float]:
+    '''computes x_pivot point for each series, as r0 with [r0,r1] being the fit range'''
+
+    x_pivots = {}
+    for idx, (r0, r1) in r_lims.items():
+        x_pivots[idx] = r0
+    return x_pivots
 
 
 

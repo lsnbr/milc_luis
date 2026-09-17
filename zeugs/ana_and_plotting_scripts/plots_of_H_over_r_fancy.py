@@ -95,8 +95,8 @@ for j, mats in enumerate(mats_list):
     plt.setp(ax.get_yticklabels(), ha='left')
 
     # define the zoomed region
-    axins.set_xlim({1:(7.5,14),       2:(6,9)        }[mats])
-    axins.set_ylim({1:(-0.027,0.005), 2:(-0.11,0.017)}[mats])
+    axins.set_xlim({1:(7.5,14),       2:(5.5,9)        }[mats])
+    axins.set_ylim({1:(-0.027,0.005), 2:(-0.12,0.017)}[mats])
     axins.tick_params(axis='both', which='both', labelsize=6)
 
     # draw the box on the main plot and connecting lines to the zoomin
@@ -108,7 +108,7 @@ for j, mats in enumerate(mats_list):
 
     # same xaxis labels and shared yaxis label
     ax.set_xlabel(r'$r/a$')
-    if j==0: ax.set_ylabel(r'$h_{E,t}(\omega_n, r) \cdot r^2 / T^5$')
+    if j==0: ax.set_ylabel(r'$h_{E,t_\mathrm{f}}(\omega_n, r) \cdot r^2 / T^5$')
     else:    ax.set_ylabel(None)
 
     # combine legends of data and fitfcn plots

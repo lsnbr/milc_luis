@@ -309,7 +309,7 @@ def bin_cut_avg_data(
         else:
             ir_right = len(data)
 
-        r_right = dist_binned[idx][ir_right] if ir_right < len(data) else 1.1 * dist_binned[idx][-1]
+        r_right = dist_binned[idx][ir_right] if ir_right < len(data) else dist_binned[idx][-1] * 1.1
 
 
         ir_lims[idx] = (ir_left, ir_right)

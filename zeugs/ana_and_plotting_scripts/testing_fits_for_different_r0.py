@@ -7,10 +7,10 @@ from import_and_plotting_tech import *
 
 
 fss = FitSubSum(bs=False)
-fss.iflows = [8,10,11,12,14,16,18,20,21]
-print([f'{flowtimes[ifl]:.2f}' for ifl in fss.iflows])
+iflows = [8,10,11,12,14,16,18,20,21]
+print([f'{flowtimes[ifl]:.2f}' for ifl in iflows])
 
-nrows1, ncols1 = len(fss.iflows), 3
+nrows1, ncols1 = len(iflows), 3
 fig1, axes1 = plt.subplots(nrows=nrows1, ncols=ncols1, figsize=(9*ncols1, 4*nrows1))
 axes1 = np.reshape(axes1, shape=(nrows1, ncols1))
 
@@ -34,7 +34,7 @@ elif ex_max == 1:
 else:
     raise Exception('efjibwiofubwi')
 
-allfits = fss.plot_iflow_comparison_of_rleft_fits_single_mats(mats=mats, ex_max=ex_max, axes=axes1[:,0])
+allfits = fss.plot_iflow_comparison_of_rleft_fits_single_mats(mats=mats, ex_max=ex_max, iflows=iflows, axes=axes1[:,0])
 
 
 
@@ -42,19 +42,19 @@ allfits = fss.plot_iflow_comparison_of_rleft_fits_single_mats(mats=mats, ex_max=
 
 
 
-for iifl, ifl in enumerate(fss.iflows):
+for iifl, ifl in enumerate(iflows):
 
     if ex_max == 0:
         rmin1, rmin2 = {
             0 : {8:(10.5,13), 10:(11,14.5), 11:(11,15), 12:(11.5,16), 14:(12,16.5), 16:(12.5,17), 18:(13,18), 20:(14,18), 21:(14.5,18)},
             1 : {8:(7,10), 10:(7.5,10.5), 11:(8,11), 12:(8,11), 14:(8,11.5), 16:(9,12), 18:(9,12), 20:(10,13), 21:(10.5,13)},
-            2 : {8:(5+2/3,7), 10:(6,7), 11:(6,7+1/3), 12:(6+1/3,7+2/3), 14:(6+2/3,8+1/3), 16:(7,8+1/3), 18:(7+2/3,9), 20:(8,9+1/3), 21:(9,10+1/3)},
+            2 : {8:(5+2/3,7), 10:(6,7), 11:(6,7+1/3), 12:(6+1/3,7+2/3), 14:(6+1/3,7), 16:(7,8+1/3), 18:(7+2/3,9), 20:(8,9+1/3), 21:(9,10+1/3)},
         }[mats][ifl]
     elif ex_max == 1:
         rmin1, rmin2 = {
             0 : {8:(6,9.5), 10:(6.5,8.5), 11:(6.5,11), 12:(6.5,11.5), 14:(7,11), 16:(7.5,12), 18:(8,11.5), 20:(9,15), 21:(10,12)},
             1 : {8:(5.5,6.5), 10:(6.5,8), 11:(6.5,9), 12:(7,9.5), 14:(7.5,9), 16:(7,8.5), 18:(8,10), 20:(9,11), 21:(10,12)},
-            2 : {8:(5+1/3,6+2/3), 10:(5+2/3,6+2/3), 11:(5+2/3,6+2/3), 12:(6,6+1/3), 14:(6+2/3,7+1/3), 16:(6+2/3,7+2/3), 18:(6,7+2/3), 20:(8,9), 21:(8,9+2/3)},
+            2 : {8:(5,6+1/3), 10:(5+1/3,6+1/3), 11:(5+2/3,6+2/3), 12:(6,7), 14:(6,7+1/3), 16:(6+2/3,7+2/3), 18:(6,7+2/3), 20:(8,9), 21:(8,9+2/3)},
         }[mats][ifl]
     else:
         raise Exception('wefiwuhefuwihf')
@@ -80,4 +80,6 @@ for iifl, ifl in enumerate(fss.iflows):
 
 fig1.tight_layout()
 fnameabc = 'gs' if ex_max==0 else f'ex{ex_max}'
-fig1.savefig(Path.cwd() / 'zeugs' / 'plots' / f'mats_rmin_tests_{fnameabc}_mats{mats}.png', dpi=400)
+filepath = Path.cwd() / 'zeugs' / 'plots' / f'mats_rmin_tests_{fnameabc}_mats{mats}.png'
+fig1.savefig(filepath, dpi=400)
+print('saved as:', filepath)
