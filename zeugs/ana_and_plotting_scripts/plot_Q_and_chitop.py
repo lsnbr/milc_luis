@@ -71,7 +71,7 @@ ax1.errorbar(
 )
  
 ax1.set_xlabel(r'$t_\mathrm{f} / a^2$')
-ax1.set_ylabel(r'$\chi_\mathrm{top}^{1/4}\,T$')
+ax1.set_ylabel(r'$\chi_\mathrm{top}^{1/4} / T$')
 ax1.set_ylim(0, 1)
  
  
